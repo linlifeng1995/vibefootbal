@@ -571,25 +571,20 @@ function signedValue(value) {
 }
 
 function factorValue(factor = {}) {
-  if (factor.name === "市场数据") {
-    return `${pct(factor.homeImpact)} / ${pct(factor.awayImpact)}`;
-  }
   return `${signedValue(factor.homeImpact)} / ${signedValue(factor.awayImpact)}`;
 }
 
 function renderModelLogic(content = {}, report = {}) {
-  const factors = report.factors || [];
-  const odds = report.oddsImplied || {};
-  const hasMarket = ["home", "draw", "away"].some((key) => odds[key] !== null && odds[key] !== undefined);
+  const factors = (report.factors || []).filter((factor) => factor.name !== "综合校准");
   return `
     <section class="model-logic-panel">
       <div class="heat-line"></div>
       <div class="model-logic-head">
         <div>
           <h3>胜负逻辑</h3>
-          <p>模型先计算球队强度差，再结合状态、攻防匹配、赛地修正和外部市场先验。</p>
+          <p>根据基础评分、状态、攻防匹配和赛地修正，计算赛前分数差和胜平负分布。</p>
         </div>
-        <span>${hasMarket ? "模型 58% · 市场 42%" : "纯模型口径"}</span>
+        <span>模型分数计算</span>
       </div>
       <p class="model-logic-text">${content.logic || "胜负逻辑待模型生成。"}</p>
       ${

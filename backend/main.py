@@ -1215,7 +1215,7 @@ def calculate_prediction(bundle: dict[str, Any]) -> dict[str, Any]:
         {"name": "球队基础评分", "homeImpact": round(rating_gap / 20, 1), "awayImpact": round(-rating_gap / 20, 1), "detail": f"{bundle['home_name']} 与 {bundle['away_name']} 的评分差为 {round(rating_gap, 1)}。"},
         {"name": "近期状态", "homeImpact": round(form_gap, 1), "awayImpact": round(-form_gap, 1), "detail": "使用最近表现分、攻防状态做加权。"},
         {"name": "攻防匹配", "homeImpact": round(attack_gap + defense_gap, 1), "awayImpact": round(-(attack_gap + defense_gap), 1), "detail": "比较进攻强度与对手防守稳定性。"},
-        {"name": "市场数据", "homeImpact": odds_implied.get("home"), "awayImpact": odds_implied.get("away"), "detail": "如有可用市场数据，去除水位后作为外部先验。"},
+        {"name": "综合校准", "homeImpact": odds_implied.get("home"), "awayImpact": odds_implied.get("away"), "detail": "如有可用外部参考信号，会作为赛前先验参与最终校准。"},
     ]
     return {
         "home_win": probs["home"],
@@ -1239,32 +1239,28 @@ def model_logic_note(bundle: dict[str, Any], prediction: dict[str, Any]) -> str:
     home_attack_vs_away_defense = float(bundle["home_attack"] or 0) - float(bundle["away_defense"] or 0)
     away_attack_vs_home_defense = float(bundle["away_attack"] or 0) - float(bundle["home_defense"] or 0)
     venue_boost = 48 if "主场" in "".join(bundle["tags"]) or home in bundle["venue"] else 0
-    market_text = "当前没有可用市场先验，胜平负完全来自模型侧计算。"
+    calibration_text = "当前没有可用外部校准信号，胜平负来自基础分数计算。"
     odds = prediction.get("odds_implied") or {}
     if any(odds.get(key) is not None for key in ("home", "draw", "away")):
-        market_text = (
-            "胜平负概率已加入去水后的市场隐含概率，当前口径为模型侧 58% + 市场先验 42%；"
-            f"市场侧参考为 {home} {odds.get('home', '--')}%、平局 {odds.get('draw', '--')}%、{away} {odds.get('away', '--')}%。"
-        )
+        calibration_text = "胜平负概率在基础分数之外加入了赛前外部信号校准，校准项只作为概率稳定器，不作为单独结论展示。"
     venue_text = f"赛地/主场修正约 +{venue_boost} 模型点。" if venue_boost else "赛地没有给主队明显额外加成。"
     return (
-        f"模型先把球队基础评分、近期状态、攻防匹配和赛地因素合成为赛前强度差："
+        f"计算逻辑先把球队基础评分、近期状态、攻防匹配和赛地因素合成为赛前强度差："
         f"{home}相对{away}的基础评分差为 {rating_gap:+.0f}，近期状态差为 {form_gap:+.1f}，"
         f"{home}进攻对{away}防守的匹配差为 {home_attack_vs_away_defense:+.1f}，"
         f"{away}进攻对{home}防守的匹配差为 {away_attack_vs_home_defense:+.1f}，{venue_text}"
-        f"{market_text}"
+        f"{calibration_text}"
         f"归一化后得到 {home} 胜 {prediction['home_win']}%、平局 {prediction['draw']}%、{away} 胜 {prediction['away_win']}%。"
     )
 
 
 def enrich_logic_text(content_logic: Any, bundle: dict[str, Any], prediction: dict[str, Any]) -> str:
-    logic = str(content_logic or "").strip()
     note = model_logic_note(bundle, prediction)
-    if not logic:
-        return note
-    if "模型" in logic and ("评分" in logic or "市场" in logic):
-        return logic
-    return f"{note}{logic}"
+    return (
+        f"{note}"
+        "进一步看，领先方的优势来自更高的综合评分和更稳定的攻防闭环；落后一方仍可通过转换速度、定位球质量和比赛后段体能变化制造波动。"
+        "因此，这个概率更适合理解为赛前分数分布，而不是确定性结论。"
+    )
 
 
 def fallback_report(bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
@@ -1288,7 +1284,7 @@ def fallback_report(bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[
         "summary": f"{leader}在赛前评估中略占主动，但{follower}并非没有反制空间；本场关键在开局压迫、二点球保护和临场阵容完整度。",
         "logic": (
             f"{model_logic_note(bundle, prediction)}"
-            "这意味着本场不是单纯看基础评分，而是把强弱差、状态差、攻防错位、主场修正和外部先验合在一起判断。"
+            "这意味着本场不是单纯看基础评分，而是把强弱差、状态差、攻防错位、主场修正和赛前校准信号合在一起判断。"
             f"{leader}的优势主要来自更高的综合强度和更稳定的控场预期；{follower}的反制窗口则在转换速度、定位球和热门方久攻不下后的心理波动。"
             "如果赛前首发出现核心缺口，尤其是中轴线或边路速度点变化，胜平负分布需要重新计算。"
         ),
@@ -1437,7 +1433,7 @@ async def deepseek_report(
         },
         "prediction": prediction,
         "sources": sources,
-        "instruction": "请基于输入数据、模型已有足球知识和 sources 生成中文赛前分析，输出严格 JSON，字段为 summary, logic, score_prediction, totals_prediction, win_path, risk_points, key_matchups, player_spotlight, player_performance, injury_impact, player_status, lineup_notes, lineups, match_conditions, upset_conditions, data_confidence_note。logic 必须写得像模型计算说明，不要只说球队评分；需要具体解释 prediction.factors 中的球队基础评分、近期状态、攻防匹配、市场数据，以及 model_weights 的模型/市场权重如何共同推到最终胜平负概率；如果 odds_implied 有值，要说明胜平负概率已加权去水后的市场隐含概率，但不要写投注建议、赔率套利、收益等表述。score_prediction 包含 primary, alternatives, homeXg, awayXg, confidence, analysis；score_prediction.analysis 可以提到首选比分和备选比分，但不要写期望进球、概率、赔率或盘口，要从球队攻防、关键球员、比赛节奏解释为什么倾向这个比分。totals_prediction 包含 line, pick, displayPick, overProbability, underProbability, source, analysis，其中 line、overProbability、underProbability、source 只作为内部计算字段，analysis 里严禁出现盘口、赔率、Bet365、参考线、概率、大球概率、小球概率等字样，只能从球队攻防、关键球员、比赛节奏、伤停和赛前条件解释进球数倾向。player_spotlight 是数组，每项包含 team,name,role,impact，标题语义是“球员分析”；name 只能是真实球员名，严禁用反击第一推进点、中卫防空核心、门将出球点、边路爆点、核心持球点等位置/能力描述冒充球员名。player_status 中没有明确伤停来源时写“暂无公布的伤停信息。”和“暂无公布的疑似缺阵信息。”，不要写主力框架可用评估、检索不到明确缺口等内部判断。lineups 包含 home, away, note；home/away 各包含 team, formation, confidence, players, note；players 为 8 到 11 项，每项包含 name, role, line，line 只能是 GK/DEF/MID/FWD。阵容如果官方首发已经发布或 sources 明确提到，confidence 写“正式”；否则 confidence 写“预测”，但可以基于模型已有知识给出具体预测球员，不要只用位置名占位。lineups.note 和 home/away.note 要清楚标记“官方首发未发布，目前为预测版。”或“官方首发已发布，当前为正式版。”。未在输入、sources 或模型可靠知识中出现的伤停不得编造。",
+        "instruction": "请基于输入数据、模型已有足球知识和 sources 生成中文赛前分析，输出严格 JSON，字段为 summary, logic, score_prediction, totals_prediction, win_path, risk_points, key_matchups, player_spotlight, player_performance, injury_impact, player_status, lineup_notes, lineups, match_conditions, upset_conditions, data_confidence_note。logic 必须写得像模型分数计算说明，不要只说球队评分；需要具体解释 prediction.factors 中的球队基础评分、近期状态、攻防匹配、综合校准如何共同推到最终胜平负概率。logic 不要出现“赔率”“盘口”“市场”“模型端”“市场端”“去水”“隐含概率”“历史对阵”“球队身价”“开盘”等词，也不要写投注建议、套利、收益等表述。score_prediction 包含 primary, alternatives, homeXg, awayXg, confidence, analysis；score_prediction.analysis 可以提到首选比分和备选比分，但不要写期望进球、概率、赔率或盘口，要从球队攻防、关键球员、比赛节奏解释为什么倾向这个比分。totals_prediction 包含 line, pick, displayPick, overProbability, underProbability, source, analysis，其中 line、overProbability、underProbability、source 只作为内部计算字段，analysis 里严禁出现盘口、赔率、Bet365、参考线、概率、大球概率、小球概率等字样，只能从球队攻防、关键球员、比赛节奏、伤停和赛前条件解释进球数倾向。player_spotlight 是数组，每项包含 team,name,role,impact，标题语义是“球员分析”；name 只能是真实球员名，严禁用反击第一推进点、中卫防空核心、门将出球点、边路爆点、核心持球点等位置/能力描述冒充球员名。player_status 中没有明确伤停来源时写“暂无公布的伤停信息。”和“暂无公布的疑似缺阵信息。”，不要写主力框架可用评估、检索不到明确缺口等内部判断。lineups 包含 home, away, note；home/away 各包含 team, formation, confidence, players, note；players 为 8 到 11 项，每项包含 name, role, line，line 只能是 GK/DEF/MID/FWD。阵容如果官方首发已经发布或 sources 明确提到，confidence 写“正式”；否则 confidence 写“预测”，但可以基于模型已有知识给出具体预测球员，不要只用位置名占位。lineups.note 和 home/away.note 要清楚标记“官方首发未发布，目前为预测版。”或“官方首发已发布，当前为正式版。”。未在输入、sources 或模型可靠知识中出现的伤停不得编造。",
     }
     thinking = thinking if thinking is not None else env("DEEPSEEK_THINKING", "enabled")
     reasoning_effort = reasoning_effort or env("DEEPSEEK_MATCH_REASONING_EFFORT", env("DEEPSEEK_REASONING_EFFORT", "medium"))
