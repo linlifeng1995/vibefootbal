@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>世界杯观赛助手 | Admin</title>
+    <link rel="stylesheet" href="./styles.css?v=20260608-job-config1" />
+  </head>
+  <body>
+    <main id="adminLogin" class="admin-login-shell">
+      <section class="admin-card admin-login-card">
+        <p class="eyebrow">ADMIN ACCESS</p>
+        <h1>进入管理后台</h1>
+        <label class="admin-label" for="adminPassword">进入密码</label>
+        <div class="admin-token-row">
+          <input id="adminPassword" type="password" autocomplete="current-password" placeholder="请输入进入密码" />
+          <button id="adminLoginButton" class="primary-button" type="button">进入</button>
+        </div>
+        <p id="adminLoginMessage" class="panel-copy">通过后还需要 Admin Token 才能执行管理操作。</p>
+      </section>
+    </main>
+
+    <div id="adminShell" class="admin-shell" hidden>
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">ADMIN CONSOLE</p>
+          <h1>赛前预测后台</h1>
+        </div>
+        <a class="admin-link" href="./">返回前台</a>
+      </header>
+
+      <section class="admin-card">
+        <label class="admin-label" for="adminToken">Admin Token</label>
+        <div class="admin-token-row">
+          <input id="adminToken" type="password" value="change-me" />
+          <button id="saveToken" class="primary-button" type="button">保存</button>
+        </div>
+        <p class="panel-copy">第一版用 Token 保护接口。生产环境请在 .env 中修改 ADMIN_TOKEN。</p>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-section-head">
+          <h2>数据更新时间</h2>
+          <button data-action="refresh-status" class="secondary-button" type="button">刷新</button>
+        </div>
+        <div id="dataStatusList" class="admin-status-grid"></div>
+      </section>
+
+      <section class="admin-card">
+        <div class="admin-section-head">
+          <h2>定时任务</h2>
+          <button data-action="refresh-jobs" class="secondary-button" type="button">刷新</button>
+        </div>
+        <div id="jobList" class="admin-job-list"></div>
+      </section>
+
+      <section class="admin-grid">
+        <button data-action="sync-fixtures" class="admin-action" type="button">同步赛程</button>
+        <button data-action="sync-odds" class="admin-action" type="button">同步赔率</button>
+        <button data-action="nearest-day" class="admin-action" type="button">生成赛前情报</button>
+        <button data-action="champion" class="admin-action" type="button">生成冠军预测</button>
+        <button data-action="refresh" class="admin-action" type="button">刷新状态</button>
+      </section>
+
+      <section id="adminProgress" class="admin-card admin-progress" hidden>
+        <div class="admin-progress-head">
+          <h2>生成进度</h2>
+          <span id="adminProgressText">0 / 0</span>
+        </div>
+        <div class="admin-progress-track" aria-hidden="true">
+          <div id="adminProgressBar" class="admin-progress-bar"></div>
+        </div>
+        <p id="adminProgressDetail" class="panel-copy">等待开始。</p>
+      </section>
+
+      <section class="admin-card">
+        <h2>比赛与报告</h2>
+        <div id="adminMatches" class="admin-list"></div>
+      </section>
+
+      <section class="admin-card">
+        <h2>操作日志</h2>
+        <pre id="adminLog">等待操作...</pre>
+      </section>
+    </div>
+    <script src="./admin.js?v=20260608-job-config1"></script>
+  </body>
+</html>

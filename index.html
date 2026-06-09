@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>世界杯观赛助手 | 赛前预测</title>
+    <link rel="stylesheet" href="./styles.css?v=20260608-disclaimer1" />
+  </head>
+  <body>
+    <header class="top-nav">
+      <div class="brand-mark">
+        <img class="brand-badge" src="./assets/worldcup-2026-icon.svg" alt="" aria-hidden="true" />
+        <strong>世界杯观赛助手</strong>
+      </div>
+      <nav class="main-nav" aria-label="主导航">
+        <button class="nav-button active" data-view="intelligence" type="button">赛前情报</button>
+        <button class="nav-button" data-view="schedule" type="button">赛程信息</button>
+        <button class="nav-button" data-view="champion" type="button">冠军预测</button>
+      </nav>
+    </header>
+
+    <aside class="legal-notice" aria-label="使用提示">
+      本工具仅用于世界杯观赛参考和赛前信息整理，预测结果不构成投注、投资或任何收益建议。
+    </aside>
+
+    <div id="intelligenceView" class="app-shell view-panel">
+      <aside class="schedule-panel">
+        <div class="panel-head">
+          <div>
+            <p class="eyebrow">MATCHDAY</p>
+            <h1>赛前情报</h1>
+          </div>
+          <span id="matchdayLabel" class="status-pill">最近赛事</span>
+        </div>
+        <p id="matchdayRange" class="panel-copy">按北京时间中午 12 点到次日 11:59 归为同一赛事日。</p>
+        <div id="matchList" class="match-list"></div>
+      </aside>
+
+      <main class="content-panel">
+        <section class="hero-card hero-layout">
+          <div class="hero-main">
+            <div class="match-meta" id="matchMeta"></div>
+            <h2 id="matchHeadline">加载赛程中...</h2>
+            <div id="versusRow" class="versus-row"></div>
+            <p id="matchSummary" class="summary-copy"></p>
+            <div class="tab-row" role="tablist" aria-label="单场分析视图">
+              <button class="tab-button active" data-tab="analysis" type="button">胜负分析</button>
+              <button class="tab-button" data-tab="players" type="button">球员状态</button>
+              <button class="tab-button" data-tab="conditions" type="button">赛前条件</button>
+            </div>
+          </div>
+          <aside class="hero-prob-card">
+            <h3>胜平负概率</h3>
+            <div id="probabilityList"></div>
+          </aside>
+        </section>
+
+        <section id="tabContent" class="tab-content"></section>
+      </main>
+
+      <aside class="prediction-panel">
+        <section class="side-card value-card">
+          <h3>爆冷指数</h3>
+          <strong id="upsetIndex">--</strong>
+          <p id="confidenceText">等待服务器生成预测。</p>
+        </section>
+      </aside>
+    </div>
+
+    <main id="scheduleView" class="standalone-view view-panel" hidden>
+      <section class="section-head">
+        <p class="eyebrow">SCHEDULE</p>
+        <h1>赛程信息</h1>
+        <p>小组赛分组、完整时间表和淘汰赛对阵结构。</p>
+      </section>
+      <section id="scheduleSummary" class="schedule-summary"></section>
+      <section class="schedule-info-grid">
+        <article class="info-section">
+          <h2>小组赛分组</h2>
+          <div id="groupList" class="group-grid"></div>
+        </article>
+        <article class="info-section">
+          <h2>完整赛程</h2>
+          <div id="calendarList" class="calendar-list"></div>
+        </article>
+      </section>
+      <section class="info-section">
+        <h2>淘汰赛对阵</h2>
+        <div id="bracketList" class="bracket-grid"></div>
+      </section>
+    </main>
+
+    <main id="championView" class="standalone-view view-panel" hidden>
+      <section class="section-head">
+        <p class="eyebrow">OUTRIGHT</p>
+        <h1>冠军预测</h1>
+        <p>基于球队强度、赛程路径和锦标赛模拟生成的冠军概率。</p>
+      </section>
+      <section id="championSummary" class="schedule-summary"></section>
+      <div id="championList" class="champion-list"></div>
+    </main>
+
+    <footer class="site-disclaimer" aria-label="免责声明">
+      <strong>免责声明</strong>
+      <p>
+        本站内容仅用于世界杯观赛交流、公开信息整理与数据模型演示，不提供彩票销售、投注平台跳转、资金交易或任何形式的投注服务。页面中的胜负概率、比分预测、大小球倾向、冠军预测及相关分析由公开数据、模型计算和 AI 辅助生成，可能存在误差、滞后或信息缺失，不构成投注建议、投资建议、收益承诺或确定性判断。请勿将本站内容用于赌博、非法彩票、境外博彩或其他违法违规用途；请理性观赛，未成年人请在监护人指导下使用。
+      </p>
+    </footer>
+
+    <script src="./app.js?v=20260608-disclaimer1"></script>
+  </body>
+</html>
