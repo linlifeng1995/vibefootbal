@@ -5,6 +5,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 import httpx
@@ -22,6 +23,8 @@ except ImportError:  # pragma: no cover - dependency is declared, fallback keeps
 
 DISCLAIMER = "本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。"
 FORBIDDEN_TERMS = ("稳赚", "必红", "投注建议", "下注", "赔率套利", "收益", "推荐买入")
+DEFAULT_HERO_IMAGE_PREVIEW_URL = "/static/assets/wechat-cover-worldcup-preview.jpg"
+DEFAULT_HERO_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "wechat-cover-worldcup-preview.jpg"
 
 _env: Callable[[str, str], str] | None = None
 _db: Callable[[], Any] | None = None
@@ -421,15 +424,31 @@ def _poster_meta(source: dict[str, Any] | None) -> dict[str, str]:
     }
 
 
+def _hero_image_preview_url() -> str:
+    return _env_value("WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL", DEFAULT_HERO_IMAGE_PREVIEW_URL)
+
+
+def _hero_image_path() -> Path:
+    configured = _env_value("WECHAT_ARTICLE_HERO_IMAGE_PATH", "")
+    if not configured:
+        return DEFAULT_HERO_IMAGE_PATH
+    path = Path(configured)
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parent.parent / path
+    return path
+
+
 def _render_html_poster(source: dict[str, Any] | None) -> str:
     meta = _poster_meta(source)
+    hero_url = html.escape(_hero_image_preview_url(), quote=True)
     return f"""
-    <section style="margin:0 -2px 22px;overflow:hidden;background:#0f1416;color:#ffffff;">
-      <section style="min-height:310px;padding:190px 22px 24px;background:#1f2937;background-image:linear-gradient(180deg,rgba(15,20,22,0.04) 0%,rgba(15,20,22,0.78) 100%),url('https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80');background-position:center;background-size:cover;">
-        <p style="margin:0 0 8px;color:#f6c35b;font-size:13px;line-height:1.4;font-weight:900;letter-spacing:0;">VIBE FOOTBALL</p>
-        <h1 style="margin:0;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:32px;font-weight:900;line-height:1.04;letter-spacing:0;">比赛日<br />重点观察</h1>
+    <section style="margin:0 0 22px;overflow:hidden;background:#0f1416;color:#ffffff;">
+      <section style="margin:0 0 0;padding:0;background:#0f1416;">
+        <img src="{hero_url}" alt="Vibe Football 比赛日前瞻" style="display:block;width:100%;max-width:100%;height:auto;margin:0;border:0;" />
       </section>
-      <section style="padding:18px 16px 0;">
+      <section style="padding:18px 16px 0;background:#0f1416;">
+        <p style="margin:0 0 8px;color:#f6c35b;font-size:13px;line-height:1.4;font-weight:900;letter-spacing:0;">VIBE FOOTBALL</p>
+        <h1 style="margin:0 0 14px;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:30px;font-weight:900;line-height:1.12;letter-spacing:0;">比赛日<br />重点观察</h1>
         <p style="margin:0;border-left:4px solid #f6c35b;padding-left:12px;color:#dbe5e2;font-size:15px;line-height:1.85;">不是只看胜负，而是看节奏、风险和关键场面。</p>
         <p style="margin:14px 0 0;color:#dbe5e2;font-size:13px;line-height:1.8;"><strong style="color:#ffffff;">{html.escape(meta["label"])}</strong> · 今日 {html.escape(meta["match_count"])} 场</p>
         <p style="margin:2px 0 0;color:#aebbb7;font-size:13px;line-height:1.8;">冷门观察：{html.escape(meta["risk_match"])} · {html.escape(meta["risk_value"])}</p>
@@ -572,18 +591,48 @@ def get_wechat_access_token() -> str:
     return token
 
 
+def upload_wechat_content_image(access_token: str) -> str:
+    image_path = _hero_image_path()
+    if not image_path.exists():
+        raise RuntimeError(f"WeChat hero image not found: {image_path}")
+    with image_path.open("rb") as image_file:
+        response = httpx.post(
+            "https://api.weixin.qq.com/cgi-bin/media/uploadimg",
+            params={"access_token": access_token},
+            files={"media": (image_path.name, image_file, "image/jpeg")},
+            timeout=30,
+        )
+    response.raise_for_status()
+    data = response.json()
+    if data.get("errcode"):
+        raise RuntimeError(f"WeChat content image upload error: {data}")
+    url = str(data.get("url") or "")
+    if not url:
+        raise RuntimeError(f"WeChat content image upload did not return url: {data}")
+    return url
+
+
+def prepare_wechat_draft_content(content: str, access_token: str) -> str:
+    preview_url = _hero_image_preview_url()
+    if preview_url not in content:
+        return content
+    wechat_image_url = upload_wechat_content_image(access_token)
+    return content.replace(preview_url, wechat_image_url).replace(html.escape(preview_url, quote=True), html.escape(wechat_image_url, quote=True))
+
+
 def push_wechat_draft(article: dict[str, Any]) -> dict[str, Any]:
     thumb_media_id = _env_value("WECHAT_DEFAULT_COVER_MEDIA_ID")
     if not thumb_media_id:
         raise RuntimeError("WECHAT_DEFAULT_COVER_MEDIA_ID is required")
     token = get_wechat_access_token()
+    content = prepare_wechat_draft_content(article["wechat_html"], token)
     payload = {
         "articles": [
             {
                 "title": article["title"],
                 "author": _env_value("WECHAT_AUTHOR", "世界杯观赛助手"),
                 "digest": article["digest"],
-                "content": article["wechat_html"],
+                "content": content,
                 "content_source_url": _env_value("WECHAT_ARTICLE_SOURCE_URL", "http://140.143.182.236/worldcup/"),
                 "thumb_media_id": thumb_media_id,
                 "need_open_comment": 0,

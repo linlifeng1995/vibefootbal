@@ -30,7 +30,8 @@
 - 所有公众号 Admin 接口都使用现有 `X-Admin-Token` 鉴权。
 - 每日文章的“重点场次”必须优先使用单场报告里的 `logic` 字段，也就是 `/worldcup` 中展示的胜负逻辑。不要让 DeepSeek 自由改写成泛化模板句。
 - 每日文章不要采用“先列今日赛程，再分别写重点场次/冷门风险/比分参考”的结构。当前结构是 `赛事前瞻`，按比赛逐场展开，每场固定包含“胜负分析 / 比分进球 / 冷门风险”，避免同一场比赛在多个 section 里重复出现。
-- 当前公众号 HTML 样式采用移动端 B 版“黑金杂志”：深色正文背景、球场大图 hero、金色时间和半透明分析卡片，优先按 iPhone 14 宽度阅读体验调整。
+- 当前公众号 HTML 样式采用移动端 B 版“黑金杂志”：深色正文背景、真实 `<img>` 标题图、金色时间和半透明分析卡片，优先按 iPhone 14 宽度阅读体验调整。不要使用 `background-image`、负边距或大 `min-height` 做公众号正文海报，微信编辑器会降级导致黑块/裁切。
+- 正文标题图默认使用 `assets/wechat-cover-worldcup-preview.jpg`。后台预览走 `/static/assets/wechat-cover-worldcup-preview.jpg`，推草稿时会调用微信 `media/uploadimg` 上传正文图片并把正文里的本地预览地址替换成微信图片 URL；这和封面 `WECHAT_DEFAULT_COVER_MEDIA_ID` 是两件事。
 - 每个比赛日只保留最新一篇公众号每日前瞻。新文章保存成功后，会清理同一 `matchday` 下的旧版本，避免后台长期堆积 v1/v2/v3 调试历史。
 - Admin 里的比赛日选择使用 `/api/admin/matchdays` 返回的下拉选项，不要让用户手填日期。内部 `matchday` 仍使用北京时间中午 12:00 到次日 11:59 的赛事日规则。
 - 如果某场没有 published report，只能写“报告待更新”，不能编造球员、伤停、赔率、历史战绩或分析。
