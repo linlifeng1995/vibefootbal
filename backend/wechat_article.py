@@ -424,14 +424,15 @@ def _poster_meta(source: dict[str, Any] | None) -> dict[str, str]:
 def _render_html_poster(source: dict[str, Any] | None) -> str:
     meta = _poster_meta(source)
     return f"""
-    <section style="margin:0 0 26px;overflow:hidden;border-radius:18px;padding:16px 16px 22px;background:#101518;color:#ffffff;">
-      <section style="min-height:250px;border-radius:14px;background:#1f2937;background-image:linear-gradient(180deg,rgba(16,21,24,0.02) 0%,rgba(16,21,24,0.58) 100%),url('https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80');background-position:center;background-size:cover;"></section>
-      <p style="margin:20px 0 10px;color:#f6c35b;font-size:13px;line-height:1.4;font-weight:900;">VIBE FOOTBALL</p>
-      <h1 style="margin:0 0 12px;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:31px;font-weight:900;line-height:1.16;">比赛日<br />重点观察</h1>
-      <p style="margin:0;border-left:4px solid #f6c35b;padding-left:12px;color:#dbe5e2;font-size:15px;line-height:1.85;">不是只看胜负，而是看节奏、风险和关键场面。</p>
-      <section style="margin-top:18px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.18);">
-        <p style="margin:0 0 6px;font-size:13px;color:#dbe5e2;"><strong style="color:#ffffff;">{html.escape(meta["label"])}</strong> · 今日 {html.escape(meta["match_count"])} 场</p>
-        <p style="margin:0;font-size:13px;color:#dbe5e2;">冷门观察：{html.escape(meta["risk_match"])} · {html.escape(meta["risk_value"])}</p>
+    <section style="margin:0 -2px 22px;overflow:hidden;background:#0f1416;color:#ffffff;">
+      <section style="min-height:310px;padding:190px 22px 24px;background:#1f2937;background-image:linear-gradient(180deg,rgba(15,20,22,0.04) 0%,rgba(15,20,22,0.78) 100%),url('https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80');background-position:center;background-size:cover;">
+        <p style="margin:0 0 8px;color:#f6c35b;font-size:13px;line-height:1.4;font-weight:900;letter-spacing:0;">VIBE FOOTBALL</p>
+        <h1 style="margin:0;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:32px;font-weight:900;line-height:1.04;letter-spacing:0;">比赛日<br />重点观察</h1>
+      </section>
+      <section style="padding:18px 16px 0;">
+        <p style="margin:0;border-left:4px solid #f6c35b;padding-left:12px;color:#dbe5e2;font-size:15px;line-height:1.85;">不是只看胜负，而是看节奏、风险和关键场面。</p>
+        <p style="margin:14px 0 0;color:#dbe5e2;font-size:13px;line-height:1.8;"><strong style="color:#ffffff;">{html.escape(meta["label"])}</strong> · 今日 {html.escape(meta["match_count"])} 场</p>
+        <p style="margin:2px 0 0;color:#aebbb7;font-size:13px;line-height:1.8;">冷门观察：{html.escape(meta["risk_match"])} · {html.escape(meta["risk_value"])}</p>
       </section>
     </section>
     """
@@ -439,9 +440,9 @@ def _render_html_poster(source: dict[str, Any] | None) -> str:
 
 def _render_preview_item(label: str, value: str, color: str) -> str:
     return f"""
-    <section style="margin:12px 0 0;padding:12px 12px;border-left:4px solid {color};background:#fffaf1;border-radius:10px;">
-      <strong style="display:block;margin:0 0 6px;color:#1c1917;font-size:14px;line-height:1.5;">{html.escape(label)}</strong>
-      <p style="margin:0;color:#57534e;font-size:14px;line-height:1.85;">{html.escape(value)}</p>
+    <section style="margin:10px 0 0;padding:11px 12px;border:1px solid rgba(246,195,91,0.20);border-radius:12px;background:rgba(255,255,255,0.055);">
+      <strong style="display:block;margin:0 0 5px;color:{color};font-size:13px;line-height:1.5;font-weight:900;">{html.escape(label)}</strong>
+      <p style="margin:0;color:#cbd5d1;font-size:14px;line-height:1.78;">{html.escape(value)}</p>
     </section>
     """
 
@@ -457,25 +458,25 @@ def _render_match_previews(source: dict[str, Any] | None) -> str:
         meta = " · ".join(item for item in (group, venue) if item)
         rows.append(
             f"""
-            <section style="display:block;margin:0 0 18px;border:1px solid #e7dfd2;border-radius:14px;padding:15px;background:#fffdf7;">
+            <section style="display:block;margin:0 0 20px;border-top:1px solid rgba(255,255,255,0.14);padding:16px 0 0;background:#0f1416;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                 <tr>
-                  <td width="70" valign="top" style="width:70px;color:#9a3412;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:900;line-height:1.2;">{html.escape(_format_time(match.get("kickoff")).split(" ")[-1])}</td>
+                  <td width="70" valign="top" style="width:70px;color:#f6c35b;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:900;line-height:1.2;">{html.escape(_format_time(match.get("kickoff")).split(" ")[-1])}</td>
                   <td valign="top">
-                    <strong style="display:block;margin:0 0 4px;color:#1c1917;font-size:18px;font-weight:900;line-height:1.45;">{html.escape(str(match.get("home") or "待定"))} vs {html.escape(str(match.get("away") or "待定"))}</strong>
-                    <p style="margin:0;color:#9a3412;font-size:12px;line-height:1.6;font-weight:800;">{html.escape(meta)}</p>
+                    <strong style="display:block;margin:0 0 4px;color:#ffffff;font-size:18px;font-weight:900;line-height:1.45;">{html.escape(str(match.get("home") or "待定"))} vs {html.escape(str(match.get("away") or "待定"))}</strong>
+                    <p style="margin:0;color:#aebbb7;font-size:12px;line-height:1.6;font-weight:800;">{html.escape(meta)}</p>
                   </td>
                 </tr>
               </table>
-              {_render_preview_item("胜负分析", _match_logic_text(match), "#111827")}
-              {_render_preview_item("比分进球", _match_score_text(match), "#d97706")}
-              {_render_preview_item("冷门风险", _match_risk_text(match), "#0f766e")}
+              {_render_preview_item("胜负分析", _match_logic_text(match), "#f6c35b")}
+              {_render_preview_item("比分进球", _match_score_text(match), "#fbbf24")}
+              {_render_preview_item("冷门风险", _match_risk_text(match), "#7dd3c7")}
             </section>
             """
         )
     return f"""
-    <section style="margin:0 0 26px;">
-      <h2 style="margin:0 0 18px;color:#1c1917;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:22px;font-weight:900;line-height:1.45;">赛事前瞻</h2>
+    <section style="margin:0 0 24px;padding:0 16px 2px;background:#0f1416;color:#ffffff;">
+      <h2 style="margin:0 0 16px;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:22px;font-weight:900;line-height:1.45;">赛事前瞻</h2>
       {''.join(rows)}
     </section>
     """
@@ -519,31 +520,31 @@ def render_wechat_html(markdown_text: str, source: dict[str, Any] | None = None)
         cleaned = re.sub(r"\s+on\w+\s*=\s*(['\"]).*?\1", "", cleaned, flags=re.I | re.S)
 
     style_map = {
-        "h1": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:23px;font-weight:900;line-height:1.45;margin:8px 0 18px;color:#1c1917;"',
-        "h2": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:21px;font-weight:900;line-height:1.5;margin:30px 0 14px;color:#1c1917;"',
-        "h3": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:18px;font-weight:900;line-height:1.5;margin:24px 0 10px;color:#1c1917;"',
-        "p": 'style="font-size:15px;line-height:1.9;margin:0 0 14px;color:#57534e;"',
-        "ul": 'style="list-style:none;padding-left:0;margin:0 0 18px;color:#57534e;"',
+        "h1": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:23px;font-weight:900;line-height:1.45;margin:8px 0 18px;color:#ffffff;"',
+        "h2": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:21px;font-weight:900;line-height:1.5;margin:30px 0 14px;color:#ffffff;"',
+        "h3": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:18px;font-weight:900;line-height:1.5;margin:24px 0 10px;color:#ffffff;"',
+        "p": 'style="font-size:15px;line-height:1.9;margin:0 0 14px;color:#cbd5d1;"',
+        "ul": 'style="list-style:none;padding-left:0;margin:0 0 18px;color:#cbd5d1;"',
         "ol": 'style="padding-left:20px;margin:0 0 18px;color:#57534e;"',
-        "li": 'style="font-size:15px;line-height:1.85;margin:0 0 12px;border-bottom:1px solid #e7dfd2;padding:0 0 12px;color:#57534e;"',
-        "blockquote": 'style="border-left:4px solid #111827;padding:10px 12px;margin:16px 0;background:#f7f3ea;color:#374151;"',
-        "strong": 'style="font-weight:900;color:#1c1917;"',
-        "em": 'style="font-style:normal;color:#9a3412;font-weight:700;"',
+        "li": 'style="font-size:15px;line-height:1.85;margin:0 0 12px;border-bottom:1px solid rgba(255,255,255,0.12);padding:0 0 12px;color:#cbd5d1;"',
+        "blockquote": 'style="border-left:4px solid #f6c35b;padding:10px 12px;margin:16px 0;background:rgba(255,255,255,0.055);color:#dbe5e2;"',
+        "strong": 'style="font-weight:900;color:#ffffff;"',
+        "em": 'style="font-style:normal;color:#f6c35b;font-weight:700;"',
     }
     styled = cleaned
     for tag, style in style_map.items():
         styled = re.sub(fr"<{tag}>", f"<{tag} {style}>", styled)
     styled = styled.replace(
         DISCLAIMER,
-        f'<span style="display:block;padding:12px 14px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:14px;line-height:1.75;">{DISCLAIMER}</span>',
+        f'<span style="display:block;padding:12px 14px;border-radius:10px;background:rgba(246,195,91,0.10);border:1px solid rgba(246,195,91,0.24);color:#f6c35b;font-size:14px;line-height:1.75;">{DISCLAIMER}</span>',
     )
     poster = _render_html_poster(source)
     previews = _render_match_previews(source)
     return f"""
-    <section style="max-width:677px;margin:0 auto;padding:16px 12px 22px;background:#f7efe0;color:#1c1917;">
+    <section style="max-width:677px;margin:0 auto;padding:0 0 22px;background:#0f1416;color:#ffffff;">
       {poster}
       {previews}
-      <section style="padding:2px 2px 0;">
+      <section style="padding:0 16px;">
         {styled}
       </section>
     </section>
