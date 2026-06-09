@@ -2090,6 +2090,80 @@ h1 {
   margin-bottom: 14px;
 }
 
+.admin-fold {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-fold summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 64px;
+  padding: 16px 20px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.admin-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-fold summary span {
+  min-width: 0;
+}
+
+.admin-fold summary strong,
+.admin-fold summary small {
+  display: block;
+}
+
+.admin-fold summary strong {
+  margin-bottom: 4px;
+  font-size: 20px;
+}
+
+.admin-fold summary small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.admin-fold summary b {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--gold);
+  background: rgba(238, 197, 123, 0.08);
+  font-size: 12px;
+}
+
+.admin-fold[open] summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-fold[open] summary b {
+  color: var(--mint);
+}
+
+.admin-fold[open] summary b::before {
+  content: "收起";
+  font-weight: 900;
+}
+
+.admin-fold[open] summary b {
+  font-size: 0;
+}
+
+.admin-fold[open] summary b::before {
+  font-size: 12px;
+}
+
+.admin-fold .admin-list {
+  padding: 16px 20px 20px;
+}
+
 .admin-section-head {
   display: flex;
   align-items: center;

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>世界杯观赛助手 | Admin</title>
-    <link rel="stylesheet" href="./styles.css?v=20260608-job-config1" />
+    <link rel="stylesheet" href="./styles.css?v=20260609-admin-fold1" />
   </head>
   <body>
     <main id="adminLogin" class="admin-login-shell">
@@ -74,11 +74,6 @@
       </section>
 
       <section class="admin-card">
-        <h2>比赛与报告</h2>
-        <div id="adminMatches" class="admin-list"></div>
-      </section>
-
-      <section class="admin-card">
         <div class="admin-section-head">
           <div>
             <h2>公众号文章</h2>
@@ -113,11 +108,22 @@
         </article>
       </section>
 
+      <details class="admin-card admin-fold">
+        <summary>
+          <span>
+            <strong>比赛与报告</strong>
+            <small>单场检索和报告生成维护工具，日常生成公众号可先不用展开。</small>
+          </span>
+          <b>展开</b>
+        </summary>
+        <div id="adminMatches" class="admin-list"></div>
+      </details>
+
       <section class="admin-card">
         <h2>操作日志</h2>
         <pre id="adminLog">等待操作...</pre>
       </section>
     </div>
-    <script src="./admin.js?v=20260608-job-config1"></script>
+    <script src="./admin.js?v=20260609-admin-fold1"></script>
   </body>
 </html>
