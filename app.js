@@ -564,18 +564,68 @@ function renderScoreAndTotals(content = {}) {
   `;
 }
 
+function signedValue(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "--";
+  const number = Number(value);
+  return `${number > 0 ? "+" : ""}${number.toFixed(1)}`;
+}
+
+function factorValue(factor = {}) {
+  if (factor.name === "市场数据") {
+    return `${pct(factor.homeImpact)} / ${pct(factor.awayImpact)}`;
+  }
+  return `${signedValue(factor.homeImpact)} / ${signedValue(factor.awayImpact)}`;
+}
+
+function renderModelLogic(content = {}, report = {}) {
+  const factors = report.factors || [];
+  const odds = report.oddsImplied || {};
+  const hasMarket = ["home", "draw", "away"].some((key) => odds[key] !== null && odds[key] !== undefined);
+  return `
+    <section class="model-logic-panel">
+      <div class="heat-line"></div>
+      <div class="model-logic-head">
+        <div>
+          <h3>胜负逻辑</h3>
+          <p>模型先计算球队强度差，再结合状态、攻防匹配、赛地修正和外部市场先验。</p>
+        </div>
+        <span>${hasMarket ? "模型 58% · 市场 42%" : "纯模型口径"}</span>
+      </div>
+      <p class="model-logic-text">${content.logic || "胜负逻辑待模型生成。"}</p>
+      ${
+        factors.length
+          ? `<div class="model-factor-grid">
+              ${factors
+                .map(
+                  (factor) => `
+                    <article>
+                      <strong>${factor.name}</strong>
+                      <span>${factorValue(factor)}</span>
+                      <p>${factor.detail || ""}</p>
+                    </article>
+                  `,
+                )
+                .join("")}
+            </div>`
+          : ""
+      }
+    </section>
+  `;
+}
+
 function renderAnalysis() {
   const content = state.selectedReport?.report?.content;
   if (!content) return `<div class="empty-state">本场报告未发布。请在 Admin 后台生成并发布。</div>`;
+  const report = state.selectedReport?.report || {};
   return `
     <section class="source-card analysis-lead">
       <h3>核心判断</h3>
       <p>${content.summary || "暂无结论。"}</p>
     </section>
     ${renderSpotlights(content.player_spotlight || [])}
+    ${renderModelLogic(content, report)}
     ${renderScoreAndTotals(content)}
     <div class="insight-grid">
-      <article class="insight-card"><div class="heat-line"></div><h3>胜负逻辑</h3><p>${content.logic}</p></article>
       <article class="insight-card"><div class="heat-line"></div><h3>赢球路径</h3>${list(content.win_path)}</article>
       <article class="insight-card"><div class="heat-line"></div><h3>丢分风险</h3>${list(content.risk_points)}</article>
       <article class="insight-card"><div class="heat-line"></div><h3>关键对位</h3>${list(content.key_matchups)}</article>

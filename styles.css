@@ -843,6 +843,85 @@ h1 {
   font-weight: 800;
 }
 
+.model-logic-panel {
+  margin: 16px 0;
+  border: 1px solid rgba(238, 197, 123, 0.24);
+  border-radius: 14px;
+  padding: 18px;
+  background:
+    linear-gradient(135deg, rgba(238, 197, 123, 0.08), rgba(69, 115, 104, 0.08)),
+    var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.model-logic-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.model-logic-head h3 {
+  margin-bottom: 6px;
+  font-size: 22px;
+}
+
+.model-logic-head p,
+.model-logic-text,
+.model-factor-grid p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.model-logic-head span {
+  align-self: flex-start;
+  white-space: nowrap;
+  border: 1px solid rgba(238, 197, 123, 0.28);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--gold);
+  background: rgba(238, 197, 123, 0.08);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.model-logic-text {
+  margin-bottom: 14px;
+}
+
+.model-factor-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.model-factor-grid article {
+  min-width: 0;
+  border: 1px solid rgba(119, 151, 146, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.model-factor-grid strong,
+.model-factor-grid span {
+  display: block;
+}
+
+.model-factor-grid strong {
+  margin-bottom: 6px;
+}
+
+.model-factor-grid span {
+  margin-bottom: 6px;
+  color: var(--gold);
+  font-weight: 900;
+}
+
+.model-factor-grid p {
+  font-size: 12px;
+}
+
 .factor-card {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1734,11 +1813,21 @@ h1 {
   .insight-grid,
   .spotlight-grid,
   .formation-grid,
+  .model-factor-grid,
   .market-grid,
   .mini-grid,
   .prediction-panel,
   .schedule-summary {
     grid-template-columns: 1fr;
+  }
+
+  .model-logic-head {
+    flex-direction: column;
+  }
+
+  .model-logic-head span {
+    align-self: flex-start;
+    white-space: normal;
   }
 
   .schedule-summary {
