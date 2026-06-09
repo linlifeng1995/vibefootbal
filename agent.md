@@ -7,3 +7,40 @@
 - 不要打印 `.env` 中的真实 API Key；调用时从后端环境变量读取。
 - 批量生成仍要注意范围：默认只生成“赛前情报”最近赛事日内的比赛，不要日常刷新 72 场全量赛程。
 - 线上实测：DeepSeek 简单 JSON/单队短分析约 3 秒；把多队或完整单场报告塞进一个大 JSON 会变成 60 到 180 秒。冠军预测应按少量热门球队拆小请求或使用本地 fallback，避免一个大请求生成全部球队。
+
+## 公众号每日前瞻模块
+
+- 公众号能力内置在现有 FastAPI 工程内，不另起独立服务。
+- 核心文件是 `backend/wechat_article.py`，负责每日前瞻 source 聚合、DeepSeek 生成、事实校验、微信 HTML 渲染和草稿箱推送。
+- `backend/main.py` 负责注册 `wechat_articles` 表、Admin API 和 `wechat_daily_preview` 定时任务。
+- Admin 页面在 `admin.html` / `admin.js` / `styles.css` 中新增“公众号文章”区块，可生成、预览 Markdown、预览微信 HTML、推送草稿箱。
+- 生成接口：
+  - `GET /api/admin/wechat/articles`
+  - `GET /api/admin/wechat/articles/{article_id}`
+  - `POST /api/admin/wechat/daily-preview/generate`
+  - `POST /api/admin/wechat/articles/{article_id}/push-draft`
+- 所有公众号 Admin 接口都使用现有 `X-Admin-Token` 鉴权。
+- 每日文章的“重点场次”必须优先使用单场报告里的 `logic` 字段，也就是 `/worldcup` 中展示的胜负逻辑。不要让 DeepSeek 自由改写成泛化模板句。
+- 如果某场没有 published report，只能写“报告待更新”，不能编造球员、伤停、赔率、历史战绩或分析。
+- fact check 失败时状态为 `fact_failed`，禁止推送微信草稿箱。
+
+## 图片与封面资源
+
+- 当前 Git 仓库没有存放公众号主题图的本地图片文件。
+- 微信 HTML 正文顶部主题图现在是远程 Unsplash 足球场图片 URL，写在 `backend/wechat_article.py` 的 `_render_html_poster()` 中。
+- 设计预览页 `wechat-style-previews.html` 也使用远程图片 URL，仅用于本地样式对比。
+- 微信草稿封面不在代码仓库中，使用 `.env` 的 `WECHAT_DEFAULT_COVER_MEDIA_ID` 指向微信公众号素材库里的固定封面。
+- 其他机器拉取代码后，正文远程图能否显示取决于网络和微信端对外链图片的处理。生产发布更稳妥的方案是把封面/正文图上传到微信素材库或自有静态资源，再渲染正式图片地址。
+
+## 其他端拉取运行
+
+- Git 只同步代码，不同步 `.env`、`data/worldcup.db`、已生成的公众号文章、日志和本地虚拟环境。
+- 新机器拉取后需要复制 `.env.example` 为 `.env`，再填写 `DEEPSEEK_API_KEY`、`ADMIN_TOKEN`、`ADMIN_PAGE_PASSWORD`、微信 `WECHAT_APP_ID` / `WECHAT_APP_SECRET` / `WECHAT_DEFAULT_COVER_MEDIA_ID` 等配置。
+- 安装依赖后运行：
+  ```powershell
+  .venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+  ```
+- 本地访问：
+  - `/worldcup`：世界杯预测前台。
+  - `/admin`：后台管理与公众号文章生成。
+- 公众号文章记录保存在本地 SQLite 的 `wechat_articles` 表中。其他端如果没有同一份数据库，需要重新生成文章。
