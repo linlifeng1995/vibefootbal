@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import httpx
@@ -46,23 +47,25 @@ def upload_content_image(token: str, image_path: Path) -> str:
 
 def block(title: str, body: str, *, color: str = "#f6c35b", border: bool = True, compact: bool = False) -> str:
     border_style = f"border:1px solid rgba(246,195,91,0.22);" if border else "border-left:3px solid rgba(246,195,91,0.72);"
-    pad = "14px 14px 15px" if compact else "17px 16px 18px"
-    margin = "10px 0 0" if compact else "12px 0 0"
+    pad = "9px 11px 10px" if compact else "17px 16px 18px"
+    margin = "8px 0 0" if compact else "12px 0 0"
     radius = "border-radius:10px;" if border else "border-radius:0;"
     return f"""
     <section style="margin:{margin};padding:{pad};{border_style}{radius}background:rgba(255,255,255,0.052);">
-      <p style="margin:0 0 8px;color:{color};font-size:14px;line-height:1.45;font-weight:900;">{title}</p>
-      <p style="margin:0;color:#c9d2cf;font-size:15px;line-height:1.82;">{body}</p>
+      <p style="margin:0 0 5px;color:{color};font-size:14px;line-height:1.35;font-weight:900;">{title}</p>
+      <p style="margin:0;color:#d7dfdc;font-size:14px;line-height:1.72;">{body}</p>
     </section>
     """
 
 
 def match_header_a() -> str:
     return """
-    <section style="margin:0 0 14px;padding:0 0 14px;border-bottom:1px solid rgba(255,255,255,0.14);">
-      <p style="margin:0 0 6px;color:#f6c35b;font-size:26px;line-height:1.05;font-weight:900;">03:00</p>
-      <p style="margin:0;color:#ffffff;font-size:20px;line-height:1.45;font-weight:900;">墨西哥 vs 南非</p>
-      <p style="margin:2px 0 0;color:#9faaa7;font-size:13px;line-height:1.6;font-weight:700;">A 组 · 墨西哥城</p>
+    <section style="margin:0 0 10px;padding:0 0 10px;border-top:1px solid rgba(255,255,255,0.16);">
+      <p style="margin:16px 0 2px;white-space:nowrap;color:#ffffff;font-size:18px;line-height:1.35;font-weight:900;">
+        <span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span>
+        <span style="color:#ffffff;font-size:18px;font-weight:900;">　墨西哥 vs 南非</span>
+      </p>
+      <p style="margin:0;white-space:nowrap;color:#c9d2cf;font-size:13px;line-height:1.5;font-weight:700;">A 组 · 墨西哥城</p>
     </section>
     """
 
@@ -107,7 +110,7 @@ def shell(hero_url: str, body: str) -> str:
 
 def sample_a(hero_url: str) -> str:
     body = f"""
-    <section style="margin:0 0 22px;padding:0;background:#0f1416;">
+    <section style="margin:0 0 18px;padding:0;background:#0f1416;">
       {match_header_a()}
       {block("胜负分析", ANALYSIS, compact=True)}
       {block("比分进球", SCORE, color="#fbbf24", compact=True)}
@@ -179,11 +182,15 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     token = access_token()
     hero_url = upload_content_image(token, HERO_IMAGE)
-    samples = [
-        ("样式测试A｜无表格卡片", sample_a(hero_url)),
-        ("样式测试B｜杂志分段", sample_b(hero_url)),
-        ("样式测试C｜紧凑列表", sample_c(hero_url)),
-    ]
+    variant = sys.argv[1].strip().lower() if len(sys.argv) > 1 else "all"
+    if variant in {"a", "a2"}:
+        samples = [("样式测试A2｜目标微调", sample_a(hero_url))]
+    else:
+        samples = [
+            ("样式测试A｜无表格卡片", sample_a(hero_url)),
+            ("样式测试B｜杂志分段", sample_b(hero_url)),
+            ("样式测试C｜紧凑列表", sample_c(hero_url)),
+        ]
     for title, content in samples:
         media_id = push_draft(token, title, content)
         print(f"{title}: {media_id}")
