@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>公众号移动端样式预览</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #eef2f1;
+        color: #17211f;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid rgba(23, 33, 31, 0.08);
+        padding: 18px 24px;
+        background: rgba(238, 242, 241, 0.92);
+        backdrop-filter: blur(16px);
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      header h1 {
+        font-size: 22px;
+      }
+
+      header p {
+        margin-top: 6px;
+        color: #66736f;
+        font-size: 14px;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(300px, 1fr));
+        gap: 22px;
+        padding: 24px;
+      }
+
+      .variant {
+        min-width: 0;
+      }
+
+      .variant-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .variant-title strong {
+        font-size: 15px;
+      }
+
+      .variant-title span {
+        border: 1px solid rgba(23, 33, 31, 0.12);
+        border-radius: 999px;
+        padding: 5px 8px;
+        color: #66736f;
+        font-size: 12px;
+      }
+
+      .phone {
+        width: 390px;
+        max-width: 100%;
+        height: 844px;
+        margin: 0 auto;
+        border: 10px solid #111;
+        border-radius: 34px;
+        background: #fff;
+        box-shadow: 0 24px 70px rgba(12, 23, 20, 0.18);
+        overflow: hidden;
+      }
+
+      .screen {
+        height: 100%;
+        overflow: auto;
+      }
+
+      .hero {
+        background:
+          linear-gradient(180deg, rgba(12, 17, 19, 0.05), rgba(12, 17, 19, 0.72)),
+          url("assets/wechat-cover-worldcup-preview.jpg") center / cover;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .pill {
+        border-radius: 999px;
+        padding: 5px 8px;
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .match {
+        margin-top: 14px;
+      }
+
+      .match-head {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .time {
+        flex: 0 0 auto;
+        font-family: Georgia, "Times New Roman", serif;
+        font-weight: 900;
+      }
+
+      .block {
+        margin-top: 10px;
+      }
+
+      .block strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+
+      .block p {
+        font-size: 13px;
+        line-height: 1.72;
+      }
+
+      .footer-note {
+        margin-top: 18px;
+        font-size: 12px;
+        line-height: 1.7;
+      }
+
+      .a .screen {
+        padding: 14px;
+        background: #f7efe0;
+      }
+
+      .a .hero {
+        min-height: 246px;
+        border-radius: 18px;
+        padding: 154px 18px 18px;
+        color: #fff;
+      }
+
+      .a .hero small {
+        color: #f6c35b;
+        font-weight: 900;
+      }
+
+      .a .hero h2 {
+        margin-top: 8px;
+        font-family: Georgia, "Times New Roman", "Songti SC", SimSun, serif;
+        font-size: 30px;
+        line-height: 1.08;
+      }
+
+      .a .match {
+        border: 1px solid #e7dfd2;
+        border-radius: 14px;
+        padding: 14px;
+        background: #fffdf7;
+      }
+
+      .a .time {
+        color: #9a3412;
+        font-size: 19px;
+      }
+
+      .a .block {
+        border-left: 4px solid #111827;
+        border-radius: 10px;
+        padding: 10px 11px;
+        background: #fff7ed;
+      }
+
+      .a .score {
+        border-left-color: #d97706;
+      }
+
+      .a .risk {
+        border-left-color: #0f766e;
+      }
+
+      .b .screen {
+        padding: 0;
+        background: #0f1416;
+        color: #f8fafc;
+      }
+
+      .b .hero {
+        min-height: 310px;
+        padding: 190px 22px 24px;
+      }
+
+      .b .hero small {
+        color: #f6c35b;
+        font-weight: 900;
+      }
+
+      .b .hero h2 {
+        margin-top: 8px;
+        font-size: 32px;
+        line-height: 1.04;
+      }
+
+      .b .content {
+        padding: 18px 16px 24px;
+      }
+
+      .b .match {
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+        padding-top: 16px;
+      }
+
+      .b .time {
+        color: #f6c35b;
+        font-size: 22px;
+      }
+
+      .b .match h3 {
+        color: #fff;
+      }
+
+      .b .block {
+        border: 1px solid rgba(246, 195, 91, 0.2);
+        border-radius: 12px;
+        padding: 10px 11px;
+        background: rgba(255, 255, 255, 0.055);
+      }
+
+      .b .block p {
+        color: #cbd5d1;
+      }
+
+      .c .screen {
+        padding: 14px;
+        background: #f3f7f6;
+      }
+
+      .c .hero {
+        min-height: 210px;
+        border-radius: 0 0 24px 24px;
+        margin: -14px -14px 18px;
+        padding: 128px 18px 22px;
+        color: #fff;
+      }
+
+      .c .hero h2 {
+        font-size: 28px;
+      }
+
+      .c .match {
+        position: relative;
+        padding-left: 56px;
+      }
+
+      .c .match::before {
+        content: "";
+        position: absolute;
+        left: 28px;
+        top: 6px;
+        bottom: -18px;
+        width: 2px;
+        background: #d7dedb;
+      }
+
+      .c .time {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 50px;
+        color: #0f766e;
+        font-size: 17px;
+      }
+
+      .c .card {
+        border: 1px solid #dfe8e4;
+        border-radius: 16px;
+        padding: 13px;
+        background: #fff;
+        box-shadow: 0 12px 30px rgba(27, 45, 41, 0.08);
+      }
+
+      .c .block {
+        border-top: 1px solid #edf1ef;
+        padding-top: 9px;
+      }
+
+      .d .screen {
+        padding: 20px 18px;
+        background: #ffffff;
+      }
+
+      .d .hero {
+        min-height: 168px;
+        border-radius: 20px;
+        padding: 92px 16px 16px;
+        color: #fff;
+      }
+
+      .d .hero h2 {
+        font-size: 26px;
+      }
+
+      .d .match {
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 18px;
+      }
+
+      .d .time {
+        color: #111827;
+        font-size: 16px;
+      }
+
+      .d .block strong {
+        color: #111827;
+      }
+
+      .d .block p {
+        color: #4b5563;
+      }
+
+      @media (max-width: 1280px) {
+        main {
+          grid-template-columns: repeat(2, minmax(300px, 1fr));
+        }
+      }
+
+      @media (max-width: 760px) {
+        main {
+          grid-template-columns: 1fr;
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>公众号移动端样式预览</h1>
+      <p>按 iPhone 14 宽度 390px 预览，先选风格，再固化到草稿生成逻辑。</p>
+    </header>
+
+    <main>
+      <section class="variant a">
+        <div class="variant-title"><strong>A · 球场纸刊</strong><span>稳妥优先</span></div>
+        <article class="phone">
+          <div class="screen">
+            <section class="hero"><small>VIBE FOOTBALL</small><h2>比赛日<br />重点观察</h2></section>
+            <section class="match">
+              <div class="match-head"><div class="time">03:00</div><div><h3>墨西哥 vs 南非</h3><p> A 组 · 墨西哥城</p></div></div>
+              <div class="block"><strong>胜负分析</strong><p>基础评分差 +175，近期状态 +2.4，赛地/主场修正 +48。归一化后墨西哥胜 57.6%、平局 22.7%、南非胜 19.7%。</p></div>
+              <div class="block score"><strong>比分进球</strong><p>比分参考 1-0，备选 2-0 / 1-1；进球数倾向进球偏少。</p></div>
+              <div class="block risk"><strong>冷门风险</strong><p>爆冷指数 49.3%。如果墨西哥迟迟无法破门，南非的低位防守和转换会提高比赛波动。</p></div>
+            </section>
+            <section class="match">
+              <div class="match-head"><div class="time">06:00</div><div><h3>韩国 vs 捷克</h3><p>A 组 · 洛杉矶</p></div></div>
+              <div class="block"><strong>胜负分析</strong><p>两队分数接近，韩国状态略优，捷克攻防匹配不落下风，平局区间偏厚。</p></div>
+              <div class="block score"><strong>比分进球</strong><p>比分参考 1-1；进球数倾向进球偏少。</p></div>
+              <div class="block risk"><strong>冷门风险</strong><p>爆冷指数 71.2%。定位球、高空球和中立场适应会放大不确定性。</p></div>
+            </section>
+          </div>
+        </article>
+      </section>
+
+      <section class="variant b">
+        <div class="variant-title"><strong>B · 黑金杂志</strong><span>冲击力强</span></div>
+        <article class="phone">
+          <div class="screen">
+            <section class="hero"><small>VIBE FOOTBALL</small><h2>比赛日<br />重点观察</h2></section>
+            <div class="content">
+              <section class="match">
+                <div class="match-head"><div class="time">03:00</div><div><h3>墨西哥 vs 南非</h3><p>A 组 · 墨西哥城</p></div></div>
+                <div class="block"><strong>胜负分析</strong><p>基础评分、状态和赛地修正同时指向墨西哥，胜平负分布更偏主队。</p></div>
+                <div class="block"><strong>比分进球</strong><p>1-0 为主参考，进球数偏少，关键在早段压迫能否换来领先。</p></div>
+                <div class="block"><strong>冷门风险</strong><p>南非如果撑过开局，比赛会进入低比分拉扯。</p></div>
+              </section>
+              <section class="match">
+                <div class="match-head"><div class="time">06:00</div><div><h3>韩国 vs 捷克</h3><p>A 组 · 洛杉矶</p></div></div>
+                <div class="block"><strong>胜负分析</strong><p>韩国状态略占优，但捷克身体对抗和定位球让比赛更容易胶着。</p></div>
+                <div class="block"><strong>比分进球</strong><p>1-1 为主参考，备选 1-0 / 0-1。</p></div>
+                <div class="block"><strong>冷门风险</strong><p>今日波动最高的一场，节奏和首发会明显影响分布。</p></div>
+              </section>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="variant c">
+        <div class="variant-title"><strong>C · 时间轴手册</strong><span>阅读顺序强</span></div>
+        <article class="phone">
+          <div class="screen">
+            <section class="hero"><h2>赛事前瞻</h2><p>按开球时间逐场看重点</p></section>
+            <section class="match">
+              <div class="time">03:00</div>
+              <div class="card">
+                <h3>墨西哥 vs 南非</h3>
+                <div class="block"><strong>胜负分析</strong><p>墨西哥综合分数领先，主场修正明显，南非主要依赖转换和防守韧性。</p></div>
+                <div class="block"><strong>比分进球</strong><p>1-0，进球偏少。</p></div>
+                <div class="block"><strong>冷门风险</strong><p>迟迟无法破门会让南非获得反击窗口。</p></div>
+              </div>
+            </section>
+            <section class="match">
+              <div class="time">06:00</div>
+              <div class="card">
+                <h3>韩国 vs 捷克</h3>
+                <div class="block"><strong>胜负分析</strong><p>双方分布接近，韩国转换速度和捷克定位球是两条主线。</p></div>
+                <div class="block"><strong>比分进球</strong><p>1-1，进球偏少。</p></div>
+                <div class="block"><strong>冷门风险</strong><p>高空球和身体对抗可能改变走势。</p></div>
+              </div>
+            </section>
+          </div>
+        </article>
+      </section>
+
+      <section class="variant d">
+        <div class="variant-title"><strong>D · 极简白底</strong><span>最像公众号正文</span></div>
+        <article class="phone">
+          <div class="screen">
+            <section class="hero"><h2>比赛日<br />重点观察</h2></section>
+            <section class="match">
+              <div class="match-head"><div class="time">03:00</div><div><h3>墨西哥 vs 南非</h3><p>A 组 · 墨西哥城</p></div></div>
+              <div class="block"><strong>胜负分析</strong><p>墨西哥基础评分与赛地修正都更明显，主胜区间高于平局和客胜。</p></div>
+              <div class="block"><strong>比分进球</strong><p>比分参考 1-0，进球偏少。</p></div>
+              <div class="block"><strong>冷门风险</strong><p>南非若能把比赛拖慢，仍有把比分压低的空间。</p></div>
+            </section>
+            <section class="match">
+              <div class="match-head"><div class="time">06:00</div><div><h3>韩国 vs 捷克</h3><p>A 组 · 洛杉矶</p></div></div>
+              <div class="block"><strong>胜负分析</strong><p>韩国状态略优，但两边综合分布接近，胜负差距没有被完全拉开。</p></div>
+              <div class="block"><strong>比分进球</strong><p>比分参考 1-1，进球偏少。</p></div>
+              <div class="block"><strong>冷门风险</strong><p>捷克定位球和身体对抗会增加波动。</p></div>
+            </section>
+            <p class="footer-note">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</p>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
