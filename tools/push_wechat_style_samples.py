@@ -60,11 +60,8 @@ def block(title: str, body: str, *, color: str = "#f6c35b", border: bool = True,
 
 def match_header_a() -> str:
     return """
-    <section style="margin:0 0 10px;padding:0 0 10px;border-top:1px solid rgba(255,255,255,0.16);">
-      <p style="margin:16px 0 2px;white-space:nowrap;color:#ffffff;font-size:18px;line-height:1.35;font-weight:900;">
-        <span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span>
-        <span style="color:#ffffff;font-size:18px;font-weight:900;">　墨西哥 vs 南非</span>
-      </p>
+    <section style="margin:0 0 9px;padding:0 0 7px;">
+      <p style="margin:0 0 2px;white-space:nowrap;color:#ffffff;font-size:17px;line-height:1.35;font-weight:900;"><span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span><span style="color:#ffffff;font-size:17px;font-weight:900;">&nbsp;&nbsp;墨西哥 vs 南非</span></p>
       <p style="margin:0;white-space:nowrap;color:#c9d2cf;font-size:13px;line-height:1.5;font-weight:700;">A 组 · 墨西哥城</p>
     </section>
     """
@@ -97,8 +94,8 @@ def shell(hero_url: str, body: str) -> str:
     return f"""
     <section style="max-width:677px;margin:0 auto;padding:0;background:#0f1416;color:#ffffff;">
       <img src="{hero_url}" alt="Vibe Football 比赛日重点观察" style="display:block;width:100%;height:auto;margin:0;border:0;" />
-      <section style="padding:18px 16px 28px;background:#0f1416;">
-        <p style="margin:0 0 14px;color:#ffffff;font-size:22px;line-height:1.45;font-weight:900;">赛事前瞻</p>
+      <section style="padding:14px 20px 28px;background:#0f1416;">
+        <section style="margin:0 0 16px;border-top:1px solid rgba(255,255,255,0.16);height:0;line-height:0;font-size:0;"></section>
         {body}
         <section style="margin:20px 0 0;padding:12px 13px;background:rgba(246,195,91,0.10);border:1px solid rgba(246,195,91,0.24);border-radius:8px;">
           <p style="margin:0;color:#f6c35b;font-size:13px;line-height:1.75;">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</p>
@@ -183,8 +180,9 @@ def main() -> None:
     token = access_token()
     hero_url = upload_content_image(token, HERO_IMAGE)
     variant = sys.argv[1].strip().lower() if len(sys.argv) > 1 else "all"
-    if variant in {"a", "a2"}:
-        samples = [("样式测试A2｜目标微调", sample_a(hero_url))]
+    if variant in {"a", "a2", "a3"}:
+        title = "样式测试A3｜线条对齐" if variant == "a3" else "样式测试A2｜目标微调"
+        samples = [(title, sample_a(hero_url))]
     else:
         samples = [
             ("样式测试A｜无表格卡片", sample_a(hero_url)),
