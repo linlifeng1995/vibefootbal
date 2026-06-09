@@ -23,6 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import wechat_article
+
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "worldcup.db"
 FRONTEND_DIR = ROOT
@@ -67,6 +69,13 @@ def env(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(env(name, str(default)))
+    except ValueError:
+        return default
+
+
 def db() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -94,7 +103,7 @@ def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
 
 
 def admin_page_password() -> str:
-    return env("ADMIN_PAGE_PASSWORD", "Aa51685845")
+    return env("ADMIN_PAGE_PASSWORD", "change-me")
 
 
 def admin_page_auth_token() -> str:
@@ -238,6 +247,24 @@ def init_db() -> None:
               detail_json text not null default '{}'
             );
 
+            create table if not exists wechat_articles (
+              id text primary key,
+              article_type text not null,
+              matchday text not null,
+              version integer not null,
+              status text not null,
+              title text not null,
+              digest text not null,
+              markdown text not null,
+              wechat_html text not null,
+              source_json text not null,
+              fact_check_json text,
+              wechat_media_id text,
+              error_message text,
+              created_at text not null,
+              pushed_at text
+            );
+
             create table if not exists app_meta (
               key text primary key,
               value text not null,
@@ -280,6 +307,14 @@ JOB_DEFINITIONS: list[dict[str, Any]] = [
         "trigger": "每 30 分钟",
         "default_config": {"mode": "interval", "hour": None, "minute": None, "interval_minutes": 30, "enabled": True},
         "description": "检查未来 3 小时内比赛，临近开赛时刷新报告。",
+    },
+    {
+        "id": "wechat_daily_preview",
+        "name": "WeChat daily preview draft",
+        "kind": "wechat_daily_preview",
+        "trigger": "Daily 18:00",
+        "default_config": {"mode": "daily", "hour": env_int("WECHAT_DAILY_PREVIEW_HOUR", 18), "minute": 0, "interval_minutes": None, "enabled": False},
+        "description": "Generate the next matchday WeChat daily preview. Draft push is controlled by WECHAT_DAILY_PREVIEW_AUTO_DRAFT.",
     },
     {
         "id": "schedule_refresh",
@@ -478,6 +513,37 @@ def execute_job_kind(kind: str) -> dict[str, Any]:
         summary = f"未来 3 小时刷新 {len(generated)} 场" if generated else "未来 3 小时暂无临近比赛"
         update_data_status("prematch_reports", "临场赛前情报", status, summary, "scheduler", {"reportIds": generated})
         return {"message": summary, "count": len(generated)}
+    if kind == "wechat_daily_preview":
+        groups = grouped_matchdays(query_public_matches())
+        group = next((item for item in groups if item.get("items")), None)
+        if not group:
+            update_data_status("wechat_daily_preview", "WeChat daily preview", "idle", "No matchday available", "scheduler")
+            return {"message": "No matchday available", "count": 0}
+        source = wechat_article.build_daily_preview_source(group["matchday"])
+        article = wechat_article.generate_daily_preview_article(source)
+        fact_check = wechat_article.fact_check_wechat_article(source, article)
+        saved = wechat_article.save_daily_preview_article(source, article, fact_check)
+        pushed = None
+        if saved["status"] == "generated" and env("WECHAT_DAILY_PREVIEW_AUTO_DRAFT", "false").lower() == "true":
+            with db() as conn:
+                row = conn.execute("select * from wechat_articles where id=?", (saved["id"],)).fetchone()
+            pushed = wechat_article.push_wechat_draft({**dict(row), "wechat_html": row["wechat_html"]})
+            with db() as conn:
+                conn.execute(
+                    "update wechat_articles set status=?, wechat_media_id=?, pushed_at=?, error_message=null where id=?",
+                    ("draft_pushed", pushed.get("media_id"), now_iso(), saved["id"]),
+                )
+            saved["status"] = "draft_pushed"
+            saved["wechatMediaId"] = pushed.get("media_id")
+        update_data_status(
+            "wechat_daily_preview",
+            "WeChat daily preview",
+            "ok" if saved["status"] in {"generated", "draft_pushed"} else "error",
+            f"{source.get('label') or source.get('matchday')} {saved['status']}",
+            "scheduler",
+            {"articleId": saved["id"], "wechat": pushed or {}},
+        )
+        return {"message": f"WeChat daily preview {saved['status']}: {saved['id']}", "articleId": saved["id"], "status": saved["status"]}
     if kind == "schedule_status":
         with db() as conn:
             match_count = conn.execute("select count(*) value from matches").fetchone()["value"]
@@ -2043,6 +2109,19 @@ def match_report(match_id: str) -> dict[str, Any]:
     }
 
 
+wechat_article.configure(
+    env_func=env,
+    db_func=db,
+    jdump_func=jdump,
+    jload_func=jload,
+    now_iso_func=now_iso,
+    log_event_func=log_event,
+    query_public_matches_func=query_public_matches,
+    grouped_matchdays_func=grouped_matchdays,
+    match_report_func=match_report,
+)
+
+
 @app.get("/api/tournament/champion-prediction")
 def champion_prediction() -> dict[str, Any]:
     with db() as conn:
@@ -2157,6 +2236,85 @@ def admin_data_status() -> dict[str, Any]:
             "select key,label,status,updated_at,summary,source,detail_json from data_status order by key asc"
         ).fetchall()
     return {"items": [{**dict(row), "detail": jload(row["detail_json"], {})} for row in rows]}
+
+
+@app.get("/api/admin/wechat/articles", dependencies=[Depends(require_admin)])
+def admin_wechat_articles() -> dict[str, Any]:
+    with db() as conn:
+        rows = conn.execute("select * from wechat_articles order by created_at desc limit 80").fetchall()
+    return {"items": [wechat_article.article_row_to_dict(row) for row in rows]}
+
+
+@app.get("/api/admin/wechat/articles/{article_id}", dependencies=[Depends(require_admin)])
+def admin_wechat_article_detail(article_id: str) -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute("select * from wechat_articles where id=?", (article_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="WeChat article not found")
+    return wechat_article.article_row_to_dict(row, include_body=True)
+
+
+@app.post("/api/admin/wechat/daily-preview/generate", dependencies=[Depends(require_admin)])
+def admin_generate_wechat_daily_preview(payload: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    matchday = str(payload.get("matchday") or "").strip()
+    force = bool(payload.get("force", False))
+    if not matchday:
+        groups = grouped_matchdays(query_public_matches())
+        group = next((item for item in groups if item.get("items")), None)
+        if not group:
+            raise HTTPException(status_code=404, detail="No matchday available")
+        matchday = group["matchday"]
+    if not force:
+        with db() as conn:
+            row = conn.execute(
+                """
+                select * from wechat_articles
+                where article_type='daily_preview' and matchday=? and status in ('generated','draft_pushed')
+                order by version desc limit 1
+                """,
+                (matchday,),
+            ).fetchone()
+        if row:
+            return wechat_article.article_row_to_dict(row, include_body=True)
+    try:
+        source = wechat_article.build_daily_preview_source(matchday)
+        article = wechat_article.generate_daily_preview_article(source)
+        fact_check = wechat_article.fact_check_wechat_article(source, article)
+        saved = wechat_article.save_daily_preview_article(source, article, fact_check)
+        log_event("wechat.article", saved["status"], f"Generated WeChat daily preview {saved['id']}", matchday)
+        return saved
+    except Exception as exc:
+        log_event("wechat.article", "error", f"Generate daily preview failed: {type(exc).__name__}: {exc}", matchday)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/admin/wechat/articles/{article_id}/push-draft", dependencies=[Depends(require_admin)])
+def admin_push_wechat_draft(article_id: str) -> dict[str, Any]:
+    with db() as conn:
+        row = conn.execute("select * from wechat_articles where id=?", (article_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="WeChat article not found")
+    if row["status"] == "fact_failed":
+        raise HTTPException(status_code=400, detail=row["error_message"] or "Fact check failed")
+    if row["status"] == "draft_pushed":
+        return wechat_article.article_row_to_dict(row, include_body=True)
+    try:
+        result = wechat_article.push_wechat_draft(dict(row))
+        media_id = result.get("media_id")
+        with db() as conn:
+            conn.execute(
+                "update wechat_articles set status=?, wechat_media_id=?, pushed_at=?, error_message=null where id=?",
+                ("draft_pushed", media_id, now_iso(), article_id),
+            )
+            updated = conn.execute("select * from wechat_articles where id=?", (article_id,)).fetchone()
+        log_event("wechat.draft", "success", f"Pushed WeChat draft {media_id}", article_id)
+        return wechat_article.article_row_to_dict(updated, include_body=True)
+    except Exception as exc:
+        message = f"{type(exc).__name__}: {exc}"
+        with db() as conn:
+            conn.execute("update wechat_articles set status=?, error_message=? where id=?", ("failed", message, article_id))
+        log_event("wechat.draft", "error", message, article_id)
+        raise HTTPException(status_code=500, detail=message) from exc
 
 
 @app.post("/api/admin/sync/fixtures", dependencies=[Depends(require_admin)])

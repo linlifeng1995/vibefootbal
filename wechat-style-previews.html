@@ -1,0 +1,1082 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>公众号文章样式预览</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f4f7f6;
+        --ink: #16211f;
+        --muted: #66736f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        border-bottom: 1px solid rgba(22, 33, 31, 0.08);
+        padding: 18px 24px;
+        background: rgba(244, 247, 246, 0.9);
+        backdrop-filter: blur(14px);
+      }
+
+      header h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+      }
+
+      header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+        max-width: 1480px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .preview-shell {
+        border: 1px solid rgba(22, 33, 31, 0.1);
+        border-radius: 14px;
+        background: #ffffff;
+        box-shadow: 0 20px 50px rgba(12, 30, 27, 0.08);
+        overflow: hidden;
+      }
+
+      .preview-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid rgba(22, 33, 31, 0.08);
+        padding: 14px 16px;
+        background: #fbfcfc;
+      }
+
+      .preview-label strong {
+        font-size: 15px;
+      }
+
+      .preview-label span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .wechat-page {
+        max-width: 677px;
+        margin: 0 auto;
+        padding: 22px 18px 32px;
+        background: #ffffff;
+      }
+
+      .style-a .poster {
+        margin-bottom: 22px;
+        border-radius: 14px;
+        padding: 22px 20px;
+        color: #fff;
+        background: linear-gradient(135deg, #0b3b36 0%, #0f766e 58%, #e7b75f 100%);
+      }
+
+      .style-a .poster small {
+        display: block;
+        margin-bottom: 8px;
+        color: #d9fff7;
+        font-weight: 800;
+      }
+
+      .style-a .poster h2 {
+        margin: 0 0 14px;
+        font-size: 24px;
+        line-height: 1.35;
+      }
+
+      .style-a .poster p,
+      .style-a .poster li {
+        color: #ecfffb;
+      }
+
+      .style-a h3 {
+        border-bottom: 2px solid #d6a64d;
+        padding-bottom: 8px;
+        color: #0f766e;
+      }
+
+      .style-a li {
+        margin-bottom: 10px;
+        border: 1px solid #e5eee9;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #f8faf9;
+      }
+
+      .style-b .poster {
+        margin-bottom: 22px;
+        border: 1px solid #111827;
+        padding: 20px;
+        background: #f7f1e5;
+      }
+
+      .style-b .poster small {
+        display: inline-block;
+        margin-bottom: 14px;
+        border: 1px solid #111827;
+        padding: 4px 8px;
+        color: #111827;
+        font-weight: 900;
+      }
+
+      .style-b .poster h2 {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 28px;
+        line-height: 1.25;
+      }
+
+      .style-b h3 {
+        margin-top: 28px;
+        color: #111827;
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      .style-b li {
+        margin-bottom: 12px;
+        border-left: 4px solid #111827;
+        padding: 4px 0 4px 12px;
+      }
+
+      .style-c .poster {
+        margin-bottom: 22px;
+        border-radius: 8px;
+        padding: 20px;
+        color: #e9fffb;
+        background: #081c1a;
+      }
+
+      .style-c .scoreline {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 0;
+        text-align: center;
+      }
+
+      .style-c .team {
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 8px;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.06);
+        font-weight: 900;
+      }
+
+      .style-c .vs {
+        color: #f4c45f;
+        font-weight: 900;
+      }
+
+      .style-c h3 {
+        border-left: 5px solid #16c7a4;
+        padding-left: 10px;
+        color: #0b3b36;
+      }
+
+      .style-c li {
+        margin-bottom: 10px;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #eefaf7;
+      }
+
+      .style-d .poster {
+        margin-bottom: 22px;
+        border-radius: 18px;
+        padding: 22px;
+        background: linear-gradient(180deg, #fff7ed, #ffffff);
+      }
+
+      .style-d .poster small {
+        color: #c2410c;
+        font-weight: 900;
+      }
+
+      .style-d .poster h2 {
+        margin: 8px 0 12px;
+        color: #7c2d12;
+        font-size: 24px;
+        line-height: 1.35;
+      }
+
+      .style-d .metric-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .style-d .metric {
+        border-radius: 12px;
+        padding: 10px;
+        background: #ffffff;
+        box-shadow: 0 8px 22px rgba(124, 45, 18, 0.08);
+      }
+
+      .style-d .metric strong {
+        display: block;
+        color: #c2410c;
+      }
+
+      .style-d h3 {
+        color: #9a3412;
+      }
+
+      .style-d li {
+        margin-bottom: 10px;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #fff7ed;
+      }
+
+      .style-e .image-hero {
+        position: relative;
+        margin-bottom: 22px;
+        min-height: 320px;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 24px;
+        color: #ffffff;
+        background:
+          radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.22), transparent 18%),
+          radial-gradient(circle at 82% 72%, rgba(231, 183, 95, 0.42), transparent 24%),
+          linear-gradient(135deg, rgba(5, 35, 32, 0.96), rgba(8, 80, 68, 0.82)),
+          url("https://images.unsplash.com/photo-1459865264687-595d652de67e?auto=format&fit=crop&w=1200&q=80");
+        background-position: center;
+        background-size: cover;
+      }
+
+      .style-e .image-hero::after {
+        position: absolute;
+        right: -70px;
+        bottom: -90px;
+        width: 210px;
+        height: 210px;
+        border: 22px solid rgba(255, 255, 255, 0.18);
+        border-radius: 50%;
+        content: "";
+      }
+
+      .style-e .image-hero small,
+      .style-e .image-hero h2,
+      .style-e .image-hero p,
+      .style-e .image-hero .hero-chip {
+        position: relative;
+        z-index: 1;
+      }
+
+      .style-e .image-hero small {
+        display: inline-block;
+        margin-bottom: 70px;
+        border-radius: 999px;
+        padding: 5px 10px;
+        background: rgba(255, 255, 255, 0.18);
+        font-weight: 900;
+      }
+
+      .style-e .image-hero h2 {
+        margin: 0 0 12px;
+        max-width: 430px;
+        font-size: 30px;
+        line-height: 1.18;
+      }
+
+      .style-e .hero-chip {
+        display: inline-flex;
+        margin-right: 8px;
+        margin-top: 10px;
+        border-radius: 999px;
+        padding: 7px 10px;
+        background: rgba(255, 255, 255, 0.18);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .style-e .photo-card {
+        margin-bottom: 12px;
+        overflow: hidden;
+        border-radius: 14px;
+        background: #f7faf8;
+      }
+
+      .style-e .photo-card .photo {
+        min-height: 130px;
+        background:
+          linear-gradient(135deg, rgba(10, 64, 58, 0.28), rgba(214, 166, 77, 0.2)),
+          url("https://images.unsplash.com/photo-1517466787929-bc90951d0974?auto=format&fit=crop&w=900&q=80");
+        background-position: center;
+        background-size: cover;
+      }
+
+      .style-e .photo-card p {
+        margin: 0;
+        padding: 12px;
+      }
+
+      .style-f .poster {
+        margin-bottom: 22px;
+        border-radius: 8px;
+        padding: 20px;
+        color: #fff;
+        background: linear-gradient(135deg, #10201d, #0f766e);
+      }
+
+      .style-f .fixture-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin: 16px 0 0;
+      }
+
+      .style-f .fixture-tile {
+        min-height: 108px;
+        border-radius: 12px;
+        padding: 12px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08)),
+          radial-gradient(circle at 70% 20%, rgba(255, 255, 255, 0.22), transparent 22%);
+      }
+
+      .style-f .fixture-tile strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #fff;
+      }
+
+      .style-f .fixture-tile span {
+        color: #d9fff7;
+        font-size: 12px;
+      }
+
+      .style-f .info-strip {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin: 16px 0;
+      }
+
+      .style-f .info-strip div {
+        border-radius: 12px;
+        padding: 12px;
+        background: #eefaf7;
+      }
+
+      .style-f .info-strip strong {
+        display: block;
+        color: #0f766e;
+        font-size: 18px;
+      }
+
+      .style-g .magazine-cover {
+        display: grid;
+        grid-template-columns: 0.9fr 1.1fr;
+        gap: 16px;
+        margin-bottom: 22px;
+        border-radius: 18px;
+        padding: 16px;
+        background: #101418;
+        color: #ffffff;
+      }
+
+      .style-g .cover-photo {
+        min-height: 260px;
+        border-radius: 14px;
+        background:
+          linear-gradient(180deg, rgba(16, 20, 24, 0.05), rgba(16, 20, 24, 0.72)),
+          url("https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=800&q=80");
+        background-position: center;
+        background-size: cover;
+      }
+
+      .style-g .magazine-copy small {
+        color: #e7b75f;
+        font-weight: 900;
+      }
+
+      .style-g .magazine-copy h2 {
+        margin: 12px 0;
+        font-size: 30px;
+        line-height: 1.12;
+      }
+
+      .style-g .quote {
+        border-left: 4px solid #e7b75f;
+        padding-left: 12px;
+        color: #d1d5db;
+      }
+
+      .style-g h3 {
+        color: #111827;
+      }
+
+      .style-g li {
+        margin-bottom: 10px;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 10px;
+      }
+
+      .style-h .poster {
+        margin-bottom: 22px;
+        border-radius: 16px;
+        padding: 20px;
+        background: #eef6ff;
+      }
+
+      .style-h .chart {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .style-h .bar-row {
+        display: grid;
+        grid-template-columns: 74px 1fr 48px;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+      }
+
+      .style-h .bar {
+        height: 12px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #dbeafe;
+      }
+
+      .style-h .bar span {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2563eb, #14b8a6);
+      }
+
+      .style-h .visual-card {
+        margin-bottom: 12px;
+        border-radius: 14px;
+        padding: 14px;
+        background: #f8fafc;
+      }
+
+      .style-h .visual-card strong {
+        display: block;
+        margin-bottom: 10px;
+        color: #1d4ed8;
+      }
+
+      .style-i .magazine-newspaper {
+        display: grid;
+        grid-template-columns: 0.86fr 1.14fr;
+        gap: 16px;
+        margin-bottom: 22px;
+        border: 1px solid #1f2937;
+        padding: 14px;
+        background: #f4ead8;
+      }
+
+      .style-i .cover-art {
+        min-height: 290px;
+        background:
+          linear-gradient(180deg, rgba(17, 24, 39, 0.04), rgba(17, 24, 39, 0.72)),
+          url("https://images.unsplash.com/photo-1574629810360-7efbbe195018?auto=format&fit=crop&w=900&q=80");
+        background-position: center;
+        background-size: cover;
+      }
+
+      .style-i .cover-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 290px;
+      }
+
+      .style-i .kicker {
+        display: inline-block;
+        width: fit-content;
+        border: 1px solid #111827;
+        padding: 4px 8px;
+        color: #111827;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .style-i .cover-copy h2 {
+        margin: 0;
+        color: #111827;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 31px;
+        line-height: 1.12;
+      }
+
+      .style-i .cover-copy p {
+        margin: 0;
+        color: #374151;
+      }
+
+      .style-i .issue-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 1px solid #111827;
+        padding-top: 10px;
+        gap: 8px;
+      }
+
+      .style-i .issue-row span {
+        display: block;
+        color: #6b7280;
+        font-size: 11px;
+      }
+
+      .style-i .issue-row strong {
+        display: block;
+        margin-top: 3px;
+        color: #111827;
+        font-size: 16px;
+      }
+
+      .style-i .article-title {
+        margin: 0 0 16px;
+        border-bottom: 3px double #111827;
+        padding-bottom: 12px;
+        color: #111827;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 24px;
+      }
+
+      .style-i .lead {
+        border-left: 4px solid #111827;
+        padding-left: 12px;
+        color: #374151;
+        font-size: 16px;
+        line-height: 1.85;
+      }
+
+      .style-i h3 {
+        margin-top: 30px;
+        color: #111827;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 20px;
+      }
+
+      .style-i .news-list li {
+        display: grid;
+        grid-template-columns: 86px 1fr;
+        gap: 12px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid #e5dfd2;
+        padding-bottom: 14px;
+      }
+
+      .style-i .news-list time {
+        color: #9a3412;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .style-i .news-list strong {
+        display: block;
+        margin-bottom: 5px;
+        color: #111827;
+      }
+
+      .style-i .risk-board {
+        margin: 18px 0;
+        border: 1px solid #111827;
+        padding: 14px;
+        background: #fffaf1;
+      }
+
+      .style-i .risk-board strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #111827;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 18px;
+      }
+
+      .style-j .dark-cover {
+        margin-bottom: 26px;
+        overflow: hidden;
+        border-radius: 18px;
+        padding: 16px 16px 22px;
+        background: #101518;
+        color: #ffffff;
+      }
+
+      .style-j {
+        border-radius: 18px;
+        background:
+          linear-gradient(180deg, rgba(247, 239, 224, 0.95), rgba(255, 252, 246, 0.98)),
+          repeating-linear-gradient(90deg, rgba(17, 24, 39, 0.025) 0 1px, transparent 1px 8px);
+        padding: 18px;
+      }
+
+      .style-j .stadium-image {
+        min-height: 260px;
+        border-radius: 8px;
+        background:
+          linear-gradient(180deg, rgba(16, 21, 24, 0.02) 0%, rgba(16, 21, 24, 0.44) 100%),
+          url("https://images.unsplash.com/photo-1577223625816-7546f13df25d?auto=format&fit=crop&w=1200&q=80");
+        background-position: center;
+        background-size: cover;
+      }
+
+      .style-j .cover-kicker {
+        display: block;
+        margin: 20px 0 12px;
+        color: #f6c35b;
+        font-size: 13px;
+        font-weight: 900;
+      }
+
+      .style-j .dark-cover h2 {
+        margin: 0 0 12px;
+        color: #ffffff;
+        font-family: Georgia, "Times New Roman", "Songti SC", SimSun, serif;
+        font-size: 31px;
+        font-weight: 900;
+        line-height: 1.16;
+      }
+
+      .style-j .cover-lead {
+        margin: 0;
+        border-left: 4px solid #f6c35b;
+        padding-left: 12px;
+        color: #dbe5e2;
+        font-size: 15px;
+        line-height: 1.85;
+      }
+
+      .style-j .section-title {
+        margin: 0 0 18px;
+        color: #1c1917;
+        font-family: Georgia, "Times New Roman", "Songti SC", SimSun, serif;
+        font-size: 20px;
+        font-weight: 900;
+      }
+
+      .style-j .timeline {
+        display: grid;
+        gap: 18px;
+        margin-bottom: 24px;
+      }
+
+      .style-j .timeline-item {
+        display: grid;
+        grid-template-columns: 78px 1fr;
+        gap: 14px;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 18px;
+      }
+
+      .style-j .timeline-time {
+        color: #9a3412;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 20px;
+        font-weight: 900;
+        line-height: 1.2;
+      }
+
+      .style-j .timeline-copy strong {
+        display: block;
+        margin-bottom: 6px;
+        color: #1c1917;
+        font-size: 17px;
+        font-weight: 900;
+      }
+
+      .style-j .timeline-copy p {
+        margin: 0;
+        color: #57534e;
+        font-size: 15px;
+        line-height: 1.85;
+      }
+
+      .style-j .note-card {
+        margin: 22px 0;
+        border-radius: 14px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.68);
+        box-shadow: 0 10px 26px rgba(87, 83, 78, 0.08);
+      }
+
+
+      .style-j .note-card strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #9a3412;
+      }
+
+      .wechat-page h1 {
+        margin: 0 0 16px;
+        font-size: 22px;
+        line-height: 1.45;
+      }
+
+      .wechat-page h3 {
+        margin: 26px 0 12px;
+        font-size: 18px;
+        line-height: 1.45;
+      }
+
+      .wechat-page p {
+        margin: 0 0 14px;
+        color: #374151;
+        font-size: 15px;
+        line-height: 1.9;
+      }
+
+      .wechat-page ul {
+        list-style: none;
+        margin: 0 0 18px;
+        padding: 0;
+      }
+
+      .risk {
+        margin-top: 22px;
+        border-radius: 10px;
+        padding: 12px 14px;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: 14px;
+        line-height: 1.8;
+      }
+
+      @media (max-width: 980px) {
+        main {
+          grid-template-columns: 1fr;
+          padding: 16px;
+        }
+
+        .style-g .magazine-cover,
+        .style-i .magazine-newspaper,
+        .style-i .news-list li,
+        .style-j .timeline-item,
+        .style-f .fixture-grid,
+        .style-f .info-strip {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>公众号文章样式预览</h1>
+      <p>先看风格方向；确认后再把你喜欢的样式接入正式生成模板。</p>
+    </header>
+
+    <main>
+      <article class="preview-shell">
+        <div class="preview-label"><strong>A. 专业数据日报</strong><span>最稳，适合正式公众号</span></div>
+        <section class="wechat-page style-a">
+          <div class="poster">
+            <small>WORLD CUP DAILY PREVIEW</small>
+            <h2>6月11日赛事<br />赛前观赛指南</h2>
+            <p>基于模型概率、比分参考与赛前报告，快速抓住今日赛程重点。</p>
+            <ul>
+              <li>今日场次：5 场</li>
+              <li>首场关注：墨西哥 vs 南非</li>
+              <li>冷门观察：韩国 vs 捷克 · 71.2%</li>
+            </ul>
+          </div>
+          <h1>6月11日赛事世界杯前瞻</h1>
+          <p>今天的赛程可以从模型概率、比分参考和临场不确定性三个角度来观察。</p>
+          <h3>今日赛程</h3>
+          <ul>
+            <li>06-12 03:00 墨西哥 vs 南非，胜平负：57.6% / 22.7% / 19.7%。</li>
+            <li>06-12 06:00 韩国 vs 捷克，胜平负：40.3% / 26.8% / 32.9%。</li>
+          </ul>
+          <h3>冷门风险</h3>
+          <ul>
+            <li>韩国 vs 捷克：爆冷指数 71.2%，重点看首发和中场覆盖。</li>
+          </ul>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>B. 体育报纸专栏</strong><span>更有媒体感，适合深度前瞻</span></div>
+        <section class="wechat-page style-b">
+          <div class="poster">
+            <small>DAILY MATCH NOTES</small>
+            <h2>世界杯观赛札记<br />6月11日赛程</h2>
+          </div>
+          <h1>开赛日前瞻：主场、节奏与冷门窗口</h1>
+          <p>这组版式更像体育报纸专栏，文字密度稍高，适合做“分析感”更强的公众号。</p>
+          <h3>今日赛程</h3>
+          <ul>
+            <li>墨西哥 vs 南非：主场优势明显，但低比分走势需要留意。</li>
+            <li>巴西 vs 摩洛哥：巴西略占主动，摩洛哥的反击质量是变量。</li>
+          </ul>
+          <h3>编辑观察</h3>
+          <ul>
+            <li>如果热门方迟迟打不开局面，后 30 分钟的不确定性会明显上升。</li>
+          </ul>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>C. 赛场战术板</strong><span>更运动、更适合球迷视觉</span></div>
+        <section class="wechat-page style-c">
+          <div class="poster">
+            <small>MATCHDAY BOARD</small>
+            <div class="scoreline">
+              <div class="team">墨西哥</div>
+              <div class="vs">VS</div>
+              <div class="team">南非</div>
+            </div>
+            <p>今日 5 场比赛，最高冷门指数：韩国 vs 捷克 71.2%。</p>
+          </div>
+          <h1>赛前战术板：哪些比赛最值得看？</h1>
+          <p>这套更像比赛日战术看板，视觉冲击更强，适合年轻球迷和社媒转发。</p>
+          <h3>重点场次</h3>
+          <ul>
+            <li>墨西哥 vs 南非：主队控场，客队等待反击窗口。</li>
+            <li>卡塔尔 vs 瑞士：瑞士优势更清晰，但爆冷指数不低。</li>
+          </ul>
+          <h3>比分参考</h3>
+          <ul>
+            <li>墨西哥 vs 南非：1-0，进球偏少。</li>
+            <li>韩国 vs 捷克：1-1，进球偏少。</li>
+          </ul>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>D. 轻量观赛指南</strong><span>温暖、好读，适合泛球迷</span></div>
+        <section class="wechat-page style-d">
+          <div class="poster">
+            <small>今晚看什么</small>
+            <h2>6月11日世界杯<br />轻量观赛指南</h2>
+            <div class="metric-row">
+              <div class="metric"><strong>5</strong><span>今日场次</span></div>
+              <div class="metric"><strong>71.2%</strong><span>最高冷门</span></div>
+              <div class="metric"><strong>1-0</strong><span>首场参考</span></div>
+            </div>
+          </div>
+          <h1>不想做功课？今天重点看这几场</h1>
+          <p>这套读起来轻松一些，适合把复杂预测变成普通用户也能快速看懂的观赛建议。</p>
+          <h3>先看这三场</h3>
+          <ul>
+            <li>墨西哥 vs 南非：东道主首战，主场气势是最大看点。</li>
+            <li>韩国 vs 捷克：冷门指数最高，比赛节奏可能更胶着。</li>
+            <li>巴西 vs 摩洛哥：强队开局，重点看进攻效率。</li>
+          </ul>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>E. 大图封面流</strong><span>图片占比高，适合公众号首屏冲击</span></div>
+        <section class="wechat-page style-e">
+          <div class="image-hero">
+            <small>MATCHDAY POSTER</small>
+            <h2>今晚 5 场<br />世界杯赛前前瞻</h2>
+            <p>从主场气势、冷门指数和比分倾向三个维度看比赛日。</p>
+            <span class="hero-chip">今日 5 场</span>
+            <span class="hero-chip">最高冷门 71.2%</span>
+          </div>
+          <h1>先看图，再看重点</h1>
+          <div class="photo-card">
+            <div class="photo"></div>
+            <p><strong>墨西哥 vs 南非</strong>：主场和节奏是关键词，比分参考 1-0。</p>
+          </div>
+          <div class="photo-card">
+            <div class="photo"></div>
+            <p><strong>韩国 vs 捷克</strong>：今日冷门指数最高，重点看中场覆盖和首发。</p>
+          </div>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>F. 赛程图片墙</strong><span>适合每日多场聚合</span></div>
+        <section class="wechat-page style-f">
+          <div class="poster">
+            <small>FIXTURE WALL</small>
+            <h2>6月11日赛事一屏看完</h2>
+            <div class="fixture-grid">
+              <div class="fixture-tile"><strong>墨西哥 vs 南非</strong><span>03:00 · 主胜 57.6%</span></div>
+              <div class="fixture-tile"><strong>韩国 vs 捷克</strong><span>06:00 · 冷门 71.2%</span></div>
+              <div class="fixture-tile"><strong>加拿大 vs 波黑</strong><span>06:00 · 胶着局</span></div>
+              <div class="fixture-tile"><strong>巴西 vs 摩洛哥</strong><span>09:00 · 强队观察</span></div>
+            </div>
+          </div>
+          <h1>今日赛程总览</h1>
+          <div class="info-strip">
+            <div><strong>5</strong><span>比赛</span></div>
+            <div><strong>71.2%</strong><span>最高冷门</span></div>
+            <div><strong>3</strong><span>重点场次</span></div>
+          </div>
+          <h3>阅读方式</h3>
+          <p>这套适合把每天多场比赛做成“图片墙”，用户扫一眼就知道今晚看什么。</p>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>G. 球星杂志封面</strong><span>更像内容品牌栏目</span></div>
+        <section class="wechat-page style-g">
+          <div class="magazine-cover">
+            <div class="cover-photo"></div>
+            <div class="magazine-copy">
+              <small>VIBE FOOTBALL</small>
+              <h2>比赛日<br />重点观察</h2>
+              <p class="quote">不是只看胜负，而是看节奏、风险和关键场面。</p>
+            </div>
+          </div>
+          <h1>今晚三条主线</h1>
+          <ul>
+            <li><strong>东道主开局</strong>：墨西哥能否把主场优势转化为早段压制。</li>
+            <li><strong>冷门窗口</strong>：韩国 vs 捷克的中场争夺最值得观察。</li>
+            <li><strong>强队效率</strong>：巴西面对摩洛哥，破密集能力是看点。</li>
+          </ul>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>H. 数据信息图</strong><span>适合强调模型和概率</span></div>
+        <section class="wechat-page style-h">
+          <div class="poster">
+            <small>DATA SNAPSHOT</small>
+            <h2>今日概率快照</h2>
+            <div class="chart">
+              <div class="bar-row"><span>墨西哥</span><div class="bar"><span style="width:57.6%"></span></div><b>57.6%</b></div>
+              <div class="bar-row"><span>韩国</span><div class="bar"><span style="width:40.3%"></span></div><b>40.3%</b></div>
+              <div class="bar-row"><span>巴西</span><div class="bar"><span style="width:52.4%"></span></div><b>52.4%</b></div>
+            </div>
+          </div>
+          <h1>模型视角下的比赛日</h1>
+          <div class="visual-card"><strong>最高冷门指数</strong>韩国 vs 捷克：71.2%，这场更像拉锯战。</div>
+          <div class="visual-card"><strong>比分参考</strong>墨西哥 vs 南非：1-0；韩国 vs 捷克：1-1。</div>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>I. 杂志专栏融合版</strong><span>B 的报纸专栏 + G 的品牌封面</span></div>
+        <section class="wechat-page style-i">
+          <div class="magazine-newspaper">
+            <div class="cover-art"></div>
+            <div class="cover-copy">
+              <div>
+                <span class="kicker">VIBE FOOTBALL · MATCHDAY</span>
+                <h2>世界杯<br />观赛专栏</h2>
+              </div>
+              <p>把一天的赛程写成一版体育杂志：有封面、有导读、有重点场次，也保留数据判断。</p>
+              <div class="issue-row">
+                <div><span>今日场次</span><strong>5</strong></div>
+                <div><span>最高冷门</span><strong>71.2%</strong></div>
+                <div><span>首场参考</span><strong>1-0</strong></div>
+              </div>
+            </div>
+          </div>
+          <h1 class="article-title">6月11日世界杯前瞻：主场声浪、胶着节奏与冷门窗口</h1>
+          <p class="lead">今天的赛程不是简单看谁更强，而是看热门方能否尽早打开局面，以及弱势方能不能把比赛拖入自己更舒服的低比分区间。</p>
+          <h3>今日赛程</h3>
+          <ul class="news-list">
+            <li>
+              <time>03:00</time>
+              <div><strong>墨西哥 vs 南非</strong><p>东道主首战，主场优势和中场控制是主线，比分参考 1-0。</p></div>
+            </li>
+            <li>
+              <time>06:00</time>
+              <div><strong>韩国 vs 捷克</strong><p>今日冷门指数最高，比赛可能进入更胶着的身体对抗和转换节奏。</p></div>
+            </li>
+            <li>
+              <time>09:00</time>
+              <div><strong>巴西 vs 摩洛哥</strong><p>强队开局观察样本，重点看巴西破密集和把握机会的效率。</p></div>
+            </li>
+          </ul>
+          <div class="risk-board">
+            <strong>编辑部冷门观察</strong>
+            <p>韩国 vs 捷克的爆冷指数达到 71.2%。如果热门方迟迟无法取得领先，比赛会逐渐进入弱势方更容易接受的低比分区间。</p>
+          </div>
+          <h3>比分与进球数参考</h3>
+          <ul class="news-list">
+            <li>
+              <time>参考</time>
+              <div><strong>墨西哥 vs 南非：1-0</strong><p>进球数倾向偏少，重点看主队能否在上半场打开局面。</p></div>
+            </li>
+            <li>
+              <time>参考</time>
+              <div><strong>韩国 vs 捷克：1-1</strong><p>两队概率接近，平局和低比分走势都值得关注。</p></div>
+            </li>
+          </ul>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+
+      <article class="preview-shell">
+        <div class="preview-label"><strong>J. 黑色球场封面 + 时间轴正文</strong><span>按你截图方向组合</span></div>
+        <section class="wechat-page style-j">
+          <div class="dark-cover">
+            <div class="stadium-image"></div>
+            <span class="cover-kicker">VIBE FOOTBALL</span>
+            <h2>比赛日<br />重点观察</h2>
+            <p class="cover-lead">不是只看胜负，而是看节奏、风险和关键场面。</p>
+          </div>
+
+          <h3 class="section-title">今日赛程</h3>
+          <div class="timeline">
+            <article class="timeline-item">
+              <time class="timeline-time">03:00</time>
+              <div class="timeline-copy">
+                <strong>墨西哥 vs 南非</strong>
+                <p>东道主首战，主场优势和中场控制是主线，比分参考 1-0。</p>
+              </div>
+            </article>
+            <article class="timeline-item">
+              <time class="timeline-time">06:00</time>
+              <div class="timeline-copy">
+                <strong>韩国 vs 捷克</strong>
+                <p>今日冷门指数最高，比赛可能进入更胶着的身体对抗和转换节奏。</p>
+              </div>
+            </article>
+            <article class="timeline-item">
+              <time class="timeline-time">09:00</time>
+              <div class="timeline-copy">
+                <strong>巴西 vs 摩洛哥</strong>
+                <p>强队开局观察样本，重点看巴西破密集和把握机会的效率。</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="note-card">
+            <strong>编辑部观察</strong>
+            <p>这版适合正式成稿：首屏有品牌感，正文阅读负担低，关键比赛可以继续按时间轴往下扩展。</p>
+          </div>
+          <div class="risk">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</div>
+        </section>
+      </article>
+    </main>
+  </body>
+</html>

@@ -2281,6 +2281,51 @@ h1 {
   padding: 0 14px;
 }
 
+.wechat-article.fact_failed,
+.wechat-article.failed {
+  border: 1px solid rgba(255, 107, 107, 0.34);
+}
+
+.wechat-article.draft_pushed {
+  border: 1px solid rgba(112, 202, 190, 0.34);
+}
+
+.wechat-preview {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.wechat-preview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.wechat-preview-grid section {
+  min-width: 0;
+}
+
+.wechat-preview-grid h4 {
+  margin: 0 0 10px;
+  color: var(--gold);
+}
+
+.wechat-preview-grid pre,
+.wechat-html-preview {
+  max-height: 520px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.wechat-html-preview {
+  color: #1f2937;
+  background: #ffffff;
+}
+
 pre {
   white-space: pre-wrap;
   color: var(--muted);
@@ -2301,7 +2346,8 @@ pre {
   .admin-status-grid,
   .admin-job,
   .admin-job dl,
-  .admin-job-config {
+  .admin-job-config,
+  .wechat-preview-grid {
     grid-template-columns: 1fr;
   }
 

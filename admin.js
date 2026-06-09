@@ -15,6 +15,18 @@ const progressBar = document.querySelector("#adminProgressBar");
 const progressDetail = document.querySelector("#adminProgressDetail");
 const dataStatusList = document.querySelector("#dataStatusList");
 const jobList = document.querySelector("#jobList");
+const wechatMatchday = document.querySelector("#wechatMatchday");
+const wechatArticleList = document.querySelector("#wechatArticleList");
+const wechatArticlePreview = document.querySelector("#wechatArticlePreview");
+const wechatPreviewTitle = document.querySelector("#wechatPreviewTitle");
+const wechatPreviewMeta = document.querySelector("#wechatPreviewMeta");
+const wechatMarkdownPreview = document.querySelector("#wechatMarkdownPreview");
+const wechatHtmlPreview = document.querySelector("#wechatHtmlPreview");
+const wechatPreviewError = document.querySelector("#wechatPreviewError");
+const pushWechatDraft = document.querySelector("#pushWechatDraft");
+const generateWechatDaily = document.querySelector("#generateWechatDaily");
+const refreshWechatArticles = document.querySelector("#refreshWechatArticles");
+let selectedWechatArticleId = null;
 tokenInput.value = adminState.token;
 
 function appBasePath() {
@@ -116,7 +128,7 @@ async function checkAdminPageSession() {
 }
 
 async function loadAdminDashboard() {
-  await Promise.all([loadDataStatus(), loadJobs(), loadMatches(), loadLogs()]);
+  await Promise.all([loadDataStatus(), loadJobs(), loadMatches(), loadWechatArticles(), loadLogs()]);
   resetProgress();
 }
 
@@ -249,6 +261,80 @@ async function loadMatches() {
   }
 }
 
+function wechatStatusLabel(status) {
+  const labels = {
+    generated: "已生成",
+    fact_failed: "校验失败",
+    draft_pushed: "已推草稿",
+    failed: "失败",
+  };
+  return labels[status] || status || "未知";
+}
+
+async function loadWechatArticles() {
+  try {
+    const data = await adminFetch("/api/admin/wechat/articles");
+    wechatArticleList.innerHTML = data.items.length
+      ? data.items
+          .map(
+            (article) => `
+              <article class="admin-match wechat-article ${article.status}">
+                <div>
+                  <strong>${article.title}</strong>
+                  <span>${article.matchday} · v${article.version} · ${wechatStatusLabel(article.status)}</span>
+                  <small>${article.digest || "暂无摘要"}</small>
+                  ${article.errorMessage ? `<p class="empty-state error">${article.errorMessage}</p>` : ""}
+                </div>
+                <div class="admin-buttons">
+                  <button data-wechat-preview="${article.id}" type="button">预览</button>
+                  <button data-wechat-push="${article.id}" type="button" ${article.status === "draft_pushed" || article.status === "fact_failed" ? "disabled" : ""}>推草稿</button>
+                </div>
+              </article>
+            `,
+          )
+          .join("")
+      : `<div class="empty-state">暂无公众号文章。</div>`;
+  } catch (error) {
+    wechatArticleList.innerHTML = `<div class="empty-state error">${error.message}</div>`;
+  }
+}
+
+async function loadWechatArticleDetail(articleId) {
+  const article = await adminFetch(`/api/admin/wechat/articles/${articleId}`);
+  selectedWechatArticleId = article.id;
+  wechatArticlePreview.hidden = false;
+  wechatPreviewTitle.textContent = article.title;
+  wechatPreviewMeta.textContent = `${article.matchday} · v${article.version} · ${wechatStatusLabel(article.status)} · ${formatAdminTime(article.createdAt)}`;
+  wechatMarkdownPreview.textContent = article.markdown || "";
+  wechatHtmlPreview.innerHTML = article.wechatHtml || "";
+  wechatPreviewError.hidden = !article.errorMessage;
+  wechatPreviewError.textContent = article.errorMessage || "";
+  pushWechatDraft.disabled = article.status === "draft_pushed" || article.status === "fact_failed";
+  return article;
+}
+
+async function generateWechatDailyPreview() {
+  const payload = {
+    matchday: wechatMatchday.value,
+    force: true,
+  };
+  const result = await adminFetch("/api/admin/wechat/daily-preview/generate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  await loadWechatArticles();
+  await loadWechatArticleDetail(result.id);
+  return result;
+}
+
+async function pushSelectedWechatDraft(articleId = selectedWechatArticleId) {
+  if (!articleId) throw new Error("请先选择一篇公众号文章。");
+  const result = await adminFetch(`/api/admin/wechat/articles/${articleId}/push-draft`, { method: "POST" });
+  await loadWechatArticles();
+  await loadWechatArticleDetail(articleId);
+  return result;
+}
+
 async function loadLogs() {
   try {
     const data = await adminFetch("/api/admin/logs?limit=60");
@@ -355,7 +441,18 @@ adminPassword.addEventListener("keydown", (event) => {
 
 adminShell.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
-  if (!button || button.dataset.runJob || button.dataset.research || button.dataset.generate) return;
+  if (
+    !button ||
+    button.dataset.runJob ||
+    button.dataset.research ||
+    button.dataset.generate ||
+    button.dataset.wechatPreview ||
+    button.dataset.wechatPush ||
+    button.id === "generateWechatDaily" ||
+    button.id === "refreshWechatArticles" ||
+    button.id === "pushWechatDraft"
+  )
+    return;
   setBusy(button, true);
   writeLog(`${button.dataset.originalText || button.textContent}处理中，请稍候...`);
   try {
@@ -436,6 +533,69 @@ document.querySelector("#adminMatches").addEventListener("click", async (event) 
     if (generateId) writeLog(await adminFetch(`/api/admin/matches/${generateId}/generate?publish=true`, { method: "POST" }));
     await loadMatches();
     await loadLogs();
+  } catch (error) {
+    writeLog(error.message);
+  } finally {
+    setBusy(button, false);
+  }
+});
+
+refreshWechatArticles.addEventListener("click", async () => {
+  setBusy(refreshWechatArticles, true);
+  try {
+    await loadWechatArticles();
+    writeLog("公众号文章列表已刷新");
+  } catch (error) {
+    writeLog(error.message);
+  } finally {
+    setBusy(refreshWechatArticles, false);
+  }
+});
+
+generateWechatDaily.addEventListener("click", async () => {
+  setBusy(generateWechatDaily, true, "生成中...");
+  writeLog("正在生成公众号每日前瞻...");
+  try {
+    const result = await generateWechatDailyPreview();
+    writeLog(result);
+    await loadLogs();
+    await loadDataStatus();
+  } catch (error) {
+    writeLog(error.message);
+  } finally {
+    setBusy(generateWechatDaily, false);
+  }
+});
+
+pushWechatDraft.addEventListener("click", async () => {
+  setBusy(pushWechatDraft, true, "推送中...");
+  writeLog("正在推送公众号草稿箱...");
+  try {
+    const result = await pushSelectedWechatDraft();
+    writeLog(result);
+    await loadLogs();
+  } catch (error) {
+    writeLog(error.message);
+  } finally {
+    setBusy(pushWechatDraft, false);
+  }
+});
+
+wechatArticleList.addEventListener("click", async (event) => {
+  const button = event.target.closest("button");
+  if (!button) return;
+  const previewId = button.dataset.wechatPreview;
+  const pushId = button.dataset.wechatPush;
+  setBusy(button, true);
+  try {
+    if (previewId) {
+      const article = await loadWechatArticleDetail(previewId);
+      writeLog(article);
+    }
+    if (pushId) {
+      const result = await pushSelectedWechatDraft(pushId);
+      writeLog(result);
+    }
   } catch (error) {
     writeLog(error.message);
   } finally {

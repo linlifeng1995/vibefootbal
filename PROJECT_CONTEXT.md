@@ -68,13 +68,13 @@ DEEPSEEK_MODEL=deepseek-v4-pro
 DEEPSEEK_THINKING=enabled
 DEEPSEEK_REASONING_EFFORT=high
 ADMIN_TOKEN=change-me
-ADMIN_PAGE_PASSWORD=Aa51685845
+ADMIN_PAGE_PASSWORD=change-me
 ```
 
 当前线上已知状态：
 
-- `DEEPSEEK_API_KEY` 已配置。
-- `ADMIN_PAGE_PASSWORD` 是管理端进入密码，当前默认 `Aa51685845`。
+- `DEEPSEEK_API_KEY` 需要在本地 `.env` 配置，不能提交真实 token。
+- `ADMIN_PAGE_PASSWORD` 是管理端进入密码，建议只在本地 `.env` 配置。
 - `SERPER_API_KEY` 未配置时，后端不能做真实网页检索，只能用 seed 数据和 DeepSeek 基于已知结构化数据生成。
 - `API_FOOTBALL_KEY`、`SPORTMONKS_API_TOKEN` 当前同步实现还是占位，未接完整生产映射。
 
@@ -298,3 +298,38 @@ cd /opt/worldcup-assistant
 - 今日无比赛时，赛前情报展示最近一个有比赛的赛事日。
 - 小组赛使用北京时间中午 12:00 到次日 11:59 归为同一赛事日。
 - 球员状态里没有公开数据时，只写“暂无公布的伤停信息。”，不要写内部分析描述。
+
+## 公众号每日前瞻 V1
+
+新增后台模块用于生成微信公众号每日前瞻文章，并推送到公众号草稿箱。
+
+后端文件：
+
+- `backend/wechat_article.py`：聚合比赛日 source、生成文章、事实校验、Markdown 转微信 HTML、微信草稿箱 API。
+- `backend/main.py`：注册 `wechat_articles` 表、Admin API、`wechat_daily_preview` 定时任务。
+
+后台 API，均需要 `X-Admin-Token`：
+
+- `GET /api/admin/wechat/articles`
+- `GET /api/admin/wechat/articles/{article_id}`
+- `POST /api/admin/wechat/daily-preview/generate`
+- `POST /api/admin/wechat/articles/{article_id}/push-draft`
+
+配置项：
+
+- `WECHAT_APP_ID`
+- `WECHAT_APP_SECRET`
+- `WECHAT_AUTHOR`
+- `WECHAT_DEFAULT_COVER_MEDIA_ID`
+- `WECHAT_ARTICLE_SOURCE_URL`
+- `WECHAT_DAILY_PREVIEW_AUTO_DRAFT`
+- `DEEPSEEK_WECHAT_REASONING_EFFORT`
+- `DEEPSEEK_WECHAT_THINKING`
+
+V1 约束：
+
+- 只做“每日前瞻”，不做单场前瞻、冠军预测文章和自动发布。
+- DeepSeek 只负责公众号化表达，不允许创造输入 source 以外的事实。
+- fact check 失败时状态为 `fact_failed`，禁止推送草稿箱。
+- 默认只生成文章；只有 `WECHAT_DAILY_PREVIEW_AUTO_DRAFT=true` 时定时任务才会自动推送草稿箱。
+- 草稿封面使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，第一版不动态生成封面。

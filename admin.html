@@ -79,6 +79,41 @@
       </section>
 
       <section class="admin-card">
+        <div class="admin-section-head">
+          <div>
+            <h2>公众号文章</h2>
+            <p class="panel-copy">生成每日前瞻，预览后推送到微信公众号草稿箱。</p>
+          </div>
+          <button id="refreshWechatArticles" class="secondary-button" type="button">刷新</button>
+        </div>
+        <div class="admin-token-row">
+          <input id="wechatMatchday" type="date" />
+          <button id="generateWechatDaily" class="primary-button" type="button">生成每日前瞻</button>
+        </div>
+        <div id="wechatArticleList" class="admin-list wechat-article-list"></div>
+        <article id="wechatArticlePreview" class="wechat-preview" hidden>
+          <div class="admin-section-head">
+            <div>
+              <h3 id="wechatPreviewTitle">未选择文章</h3>
+              <p id="wechatPreviewMeta" class="panel-copy"></p>
+            </div>
+            <button id="pushWechatDraft" class="primary-button" type="button">推送草稿箱</button>
+          </div>
+          <div class="wechat-preview-grid">
+            <section>
+              <h4>Markdown</h4>
+              <pre id="wechatMarkdownPreview"></pre>
+            </section>
+            <section>
+              <h4>微信 HTML</h4>
+              <div id="wechatHtmlPreview" class="wechat-html-preview"></div>
+            </section>
+          </div>
+          <p id="wechatPreviewError" class="empty-state error" hidden></p>
+        </article>
+      </section>
+
+      <section class="admin-card">
         <h2>操作日志</h2>
         <pre id="adminLog">等待操作...</pre>
       </section>
