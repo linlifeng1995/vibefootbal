@@ -616,6 +616,21 @@ def next_wechat_article_version(matchday: str) -> int:
     return int(row["value"] or 0) + 1
 
 
+def prune_old_daily_preview_articles(matchday: str, keep_id: str) -> int:
+    _require_context()
+    with _db() as conn:  # type: ignore[misc]
+        cursor = conn.execute(
+            """
+            delete from wechat_articles
+            where article_type='daily_preview'
+              and matchday=?
+              and id<>?
+            """,
+            (matchday, keep_id),
+        )
+        return int(cursor.rowcount or 0)
+
+
 def save_daily_preview_article(source: dict[str, Any], article: dict[str, str], fact_check: dict[str, Any]) -> dict[str, Any]:
     version = next_wechat_article_version(str(source["matchday"]))
     article_id = f"wechat-daily-{source['matchday']}-v{version}"
@@ -647,6 +662,9 @@ def save_daily_preview_article(source: dict[str, Any], article: dict[str, str], 
                 None,
             ),
         )
+    pruned = prune_old_daily_preview_articles(str(source["matchday"]), article_id)
+    if pruned:
+        _log("wechat.article", "success", f"Pruned {pruned} older daily preview article(s)", str(source["matchday"]))
     return {"id": article_id, "status": status, "title": article["title"], "digest": article["digest"], "version": version}
 
 

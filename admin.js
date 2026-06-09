@@ -128,7 +128,7 @@ async function checkAdminPageSession() {
 }
 
 async function loadAdminDashboard() {
-  await Promise.all([loadDataStatus(), loadJobs(), loadMatches(), loadWechatArticles(), loadLogs()]);
+  await Promise.all([loadDataStatus(), loadJobs(), loadMatches(), loadWechatMatchdays(), loadWechatArticles(), loadLogs()]);
   resetProgress();
 }
 
@@ -271,6 +271,36 @@ function wechatStatusLabel(status) {
   return labels[status] || status || "未知";
 }
 
+function formatMatchdayRange(range) {
+  if (!range?.start || !range?.end) return "";
+  return `${formatAdminTime(range.start)} - ${formatAdminTime(range.end)}`;
+}
+
+async function loadWechatMatchdays() {
+  try {
+    const currentValue = wechatMatchday.value;
+    const data = await adminFetch("/api/admin/matchdays");
+    wechatMatchday.innerHTML = data.items.length
+      ? data.items
+          .map((item) => {
+            const label = `${item.label} · ${item.count} 场 · ${formatMatchdayRange(item.range)}`;
+            return `<option value="${item.matchday}">${label}</option>`;
+          })
+          .join("")
+      : `<option value="">暂无可生成的比赛日</option>`;
+    if (currentValue && data.items.some((item) => item.matchday === currentValue)) {
+      wechatMatchday.value = currentValue;
+    }
+    wechatMatchday.disabled = !data.items.length;
+    generateWechatDaily.disabled = !data.items.length;
+  } catch (error) {
+    wechatMatchday.innerHTML = `<option value="">比赛日加载失败</option>`;
+    wechatMatchday.disabled = true;
+    generateWechatDaily.disabled = true;
+    writeLog(error.message);
+  }
+}
+
 async function loadWechatArticles() {
   try {
     const data = await adminFetch("/api/admin/wechat/articles");
@@ -314,6 +344,7 @@ async function loadWechatArticleDetail(articleId) {
 }
 
 async function generateWechatDailyPreview() {
+  if (!wechatMatchday.value) throw new Error("请先选择一个比赛日。");
   const payload = {
     matchday: wechatMatchday.value,
     force: true,

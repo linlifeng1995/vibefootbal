@@ -2157,6 +2157,22 @@ def admin_matches() -> dict[str, Any]:
     return {"items": [dict(row) for row in rows]}
 
 
+@app.get("/api/admin/matchdays", dependencies=[Depends(require_admin)])
+def admin_matchdays() -> dict[str, Any]:
+    groups = grouped_matchdays(query_public_matches())
+    return {
+        "items": [
+            {
+                "matchday": group["matchday"],
+                "label": group["label"],
+                "range": group["range"],
+                "count": len(group.get("items") or []),
+            }
+            for group in groups
+        ]
+    }
+
+
 @app.get("/api/admin/logs", dependencies=[Depends(require_admin)])
 def admin_logs(limit: int = 80) -> dict[str, Any]:
     limit = max(1, min(limit, 200))

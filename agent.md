@@ -21,6 +21,8 @@
   - `POST /api/admin/wechat/articles/{article_id}/push-draft`
 - 所有公众号 Admin 接口都使用现有 `X-Admin-Token` 鉴权。
 - 每日文章的“重点场次”必须优先使用单场报告里的 `logic` 字段，也就是 `/worldcup` 中展示的胜负逻辑。不要让 DeepSeek 自由改写成泛化模板句。
+- 每个比赛日只保留最新一篇公众号每日前瞻。新文章保存成功后，会清理同一 `matchday` 下的旧版本，避免后台长期堆积 v1/v2/v3 调试历史。
+- Admin 里的比赛日选择使用 `/api/admin/matchdays` 返回的下拉选项，不要让用户手填日期。内部 `matchday` 仍使用北京时间中午 12:00 到次日 11:59 的赛事日规则。
 - 如果某场没有 published report，只能写“报告待更新”，不能编造球员、伤停、赔率、历史战绩或分析。
 - fact check 失败时状态为 `fact_failed`，禁止推送微信草稿箱。
 
