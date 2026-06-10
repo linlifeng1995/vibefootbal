@@ -76,6 +76,7 @@ WECHAT_DEFAULT_COVER_MEDIA_ID=
 WECHAT_ARTICLE_SOURCE_URL=http://140.143.182.236/worldcup/
 WECHAT_ARTICLE_HERO_IMAGE_PATH=assets/wechat-article-hero-card.png
 WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL=/static/assets/wechat-article-hero-card.png
+WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL=
 WECHAT_DAILY_PREVIEW_AUTO_DRAFT=false
 WECHAT_DAILY_PREVIEW_HOUR=18
 DEEPSEEK_WECHAT_REASONING_EFFORT=medium
@@ -349,6 +350,7 @@ cd /opt/worldcup-assistant
 - `WECHAT_ARTICLE_SOURCE_URL`
 - `WECHAT_ARTICLE_HERO_IMAGE_PATH`
 - `WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL`
+- `WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL`
 - `WECHAT_DAILY_PREVIEW_AUTO_DRAFT`
 - `WECHAT_DAILY_PREVIEW_HOUR`
 - `DEEPSEEK_WECHAT_REASONING_EFFORT`
@@ -361,7 +363,7 @@ V1 约束：
 - fact check 失败时状态为 `fact_failed`，禁止推送草稿箱。
 - 定时任务 `公众号每日前瞻生成并推草稿` 会生成文章并自动推送到微信公众号草稿箱；后台公众号模块的“生成每日前瞻”按钮仍只生成文章，预览后可手动点“推送草稿箱”。
 - 草稿封面使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，第一版不动态生成封面。
-- 正文标题图使用仓库内固定 PNG：`assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`；推草稿时自动调用微信 `media/uploadimg` 上传并替换正文 URL。标题图不需要手动上传素材库，封面才需要 `WECHAT_DEFAULT_COVER_MEDIA_ID`。
+- 正文标题图使用仓库内固定 PNG：`assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`；推草稿时优先使用 `.env` 的 `WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL`，未配置时才调用微信 `media/uploadimg` 现场上传并替换正文 URL。封面才使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，正文标题图不能直接使用素材库 `media_id`。
 - 微信正文样式采用 A17/A15 方向：白底、PNG 透明圆角标题图、金色日期时间、金色小标题、无分割线、无 table、无整篇深色背景。
 - 赛事前瞻必须按比赛逐场展开，每场固定包含 `胜负分析`、`比分预测`、`冷门风险`。
 - 公众号里统一使用 `比分预测`，不要再使用 `比分进球`。

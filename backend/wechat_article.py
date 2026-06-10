@@ -54,6 +54,14 @@ _grouped_matchdays: Callable[[list[Any]], list[dict[str, Any]]] | None = None
 _match_report: Callable[[str], dict[str, Any]] | None = None
 
 _ACCESS_TOKEN_CACHE: dict[str, Any] = {"token": "", "expires_at": 0.0}
+_WECHAT_RETRYABLE_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.PoolTimeout,
+    httpx.ReadTimeout,
+    httpx.RemoteProtocolError,
+)
+_WECHAT_RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 
 
 def configure(
@@ -90,6 +98,10 @@ def _env_value(name: str, default: str = "") -> str:
     return _env(name, default)  # type: ignore[misc]
 
 
+def _env_flag(name: str, default: str = "false") -> bool:
+    return _env_value(name, default).lower() in {"1", "true", "yes", "on"}
+
+
 def _json_dump(value: Any) -> str:
     _require_context()
     return _jdump(value)  # type: ignore[misc]
@@ -108,6 +120,52 @@ def _now() -> str:
 def _log(action: str, status: str, message: str, target_id: str | None = None) -> None:
     _require_context()
     _log_event(action, status, message, target_id)  # type: ignore[misc]
+
+
+def _retry_delay(attempt: int) -> float:
+    return min(1.5 * attempt, 5.0)
+
+
+def _wechat_request(
+    action: str,
+    method: str,
+    url: str,
+    *,
+    attempts: int,
+    timeout: float,
+    **kwargs: Any,
+) -> httpx.Response:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = httpx.request(method, url, timeout=timeout, **kwargs)
+            if response.status_code in _WECHAT_RETRYABLE_STATUSES and attempt < attempts:
+                raise httpx.HTTPStatusError(
+                    f"retryable status {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+            response.raise_for_status()
+            return response
+        except httpx.HTTPStatusError as exc:
+            last_error = exc
+            status_code = exc.response.status_code if exc.response is not None else 0
+            if status_code not in _WECHAT_RETRYABLE_STATUSES or attempt >= attempts:
+                raise
+        except _WECHAT_RETRYABLE_EXCEPTIONS as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+
+        _log(
+            "wechat.http",
+            "warning",
+            f"{action} attempt {attempt}/{attempts} failed: {type(last_error).__name__}: {last_error}",
+        )
+        time.sleep(_retry_delay(attempt))
+    if last_error:
+        raise last_error
+    raise RuntimeError(f"{action} failed without response")
 
 
 def _extract_report_fields(report_payload: dict[str, Any]) -> dict[str, Any]:
@@ -729,6 +787,10 @@ def _hero_image_preview_url() -> str:
     return _env_value("WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL", DEFAULT_HERO_IMAGE_PREVIEW_URL)
 
 
+def _hero_image_wechat_url() -> str:
+    return _env_value("WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL", "")
+
+
 def _hero_image_path() -> Path:
     configured = _env_value("WECHAT_ARTICLE_HERO_IMAGE_PATH", "")
     if not configured:
@@ -842,12 +904,14 @@ def get_wechat_access_token() -> str:
         raise RuntimeError("WECHAT_APP_ID and WECHAT_APP_SECRET are required")
     if _ACCESS_TOKEN_CACHE["token"] and float(_ACCESS_TOKEN_CACHE["expires_at"]) > time.time() + 120:
         return str(_ACCESS_TOKEN_CACHE["token"])
-    response = httpx.get(
+    response = _wechat_request(
+        "wechat token",
+        "GET",
         "https://api.weixin.qq.com/cgi-bin/token",
         params={"grant_type": "client_credential", "appid": app_id, "secret": app_secret},
+        attempts=3,
         timeout=15,
     )
-    response.raise_for_status()
     data = response.json()
     if data.get("errcode"):
         raise RuntimeError(f"WeChat token error: {data}")
@@ -861,14 +925,40 @@ def upload_wechat_content_image(access_token: str) -> str:
     if not image_path.exists():
         raise RuntimeError(f"WeChat hero image not found: {image_path}")
     mime_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
-    with image_path.open("rb") as image_file:
-        response = httpx.post(
-            "https://api.weixin.qq.com/cgi-bin/media/uploadimg",
-            params={"access_token": access_token},
-            files={"media": (image_path.name, image_file, mime_type)},
-            timeout=30,
+    last_error: Exception | None = None
+    attempts = 2
+    for attempt in range(1, attempts + 1):
+        try:
+            with image_path.open("rb") as image_file:
+                response = httpx.post(
+                    "https://api.weixin.qq.com/cgi-bin/media/uploadimg",
+                    params={"access_token": access_token},
+                    files={"media": (image_path.name, image_file, mime_type)},
+                    timeout=20,
+                )
+            if response.status_code in _WECHAT_RETRYABLE_STATUSES and attempt < attempts:
+                raise httpx.HTTPStatusError(
+                    f"retryable status {response.status_code}",
+                    request=response.request,
+                    response=response,
+                )
+            response.raise_for_status()
+            break
+        except httpx.HTTPStatusError as exc:
+            last_error = exc
+            status_code = exc.response.status_code if exc.response is not None else 0
+            if status_code not in _WECHAT_RETRYABLE_STATUSES or attempt >= attempts:
+                raise
+        except _WECHAT_RETRYABLE_EXCEPTIONS as exc:
+            last_error = exc
+            if attempt >= attempts:
+                raise
+        _log(
+            "wechat.http",
+            "warning",
+            f"wechat image upload attempt {attempt}/{attempts} failed: {type(last_error).__name__}: {last_error}",
         )
-    response.raise_for_status()
+        time.sleep(_retry_delay(attempt))
     data = response.json()
     if data.get("errcode"):
         raise RuntimeError(f"WeChat content image upload error: {data}")
@@ -878,11 +968,37 @@ def upload_wechat_content_image(access_token: str) -> str:
     return url
 
 
+def _remove_preview_image(content: str, preview_url: str) -> str:
+    escaped_url = html.escape(preview_url, quote=True)
+    variants = "|".join(re.escape(value) for value in {preview_url, escaped_url})
+    content = re.sub(
+        rf'<section[^>]*>\s*<img[^>]+src="(?:{variants})"[^>]*>\s*</section>',
+        "",
+        content,
+        count=1,
+        flags=re.I | re.S,
+    )
+    return re.sub(rf'<img[^>]+src="(?:{variants})"[^>]*>\s*', "", content, count=1, flags=re.I | re.S)
+
+
 def prepare_wechat_draft_content(content: str, access_token: str) -> str:
     preview_url = _hero_image_preview_url()
     if preview_url not in content:
         return content
-    wechat_image_url = upload_wechat_content_image(access_token)
+    configured_url = _hero_image_wechat_url()
+    if configured_url:
+        return content.replace(preview_url, configured_url).replace(html.escape(preview_url, quote=True), html.escape(configured_url, quote=True))
+    try:
+        wechat_image_url = upload_wechat_content_image(access_token)
+    except Exception as exc:
+        if _env_flag("WECHAT_REQUIRE_CONTENT_IMAGE_UPLOAD"):
+            raise
+        _log(
+            "wechat.image",
+            "warning",
+            f"Skipped content image after upload failed: {type(exc).__name__}: {exc}",
+        )
+        return _remove_preview_image(content, preview_url)
     return content.replace(preview_url, wechat_image_url).replace(html.escape(preview_url, quote=True), html.escape(wechat_image_url, quote=True))
 
 
@@ -906,13 +1022,15 @@ def push_wechat_draft(article: dict[str, Any]) -> dict[str, Any]:
             }
         ]
     }
-    response = httpx.post(
+    response = _wechat_request(
+        "wechat draft add",
+        "POST",
         "https://api.weixin.qq.com/cgi-bin/draft/add",
         params={"access_token": token},
         json=payload,
+        attempts=2,
         timeout=30,
     )
-    response.raise_for_status()
     data = response.json()
     if data.get("errcode"):
         raise RuntimeError(f"WeChat draft error: {data}")

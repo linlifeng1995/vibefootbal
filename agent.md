@@ -7,6 +7,29 @@
 - 用户未明确要求部署时，最多给出本地验证结果和建议的部署步骤，不要主动执行 `scp`、远端解包、`systemctl restart` 或线上数据生成。
 - 涉及公众号草稿箱、线上数据库、线上 `.env`、Nginx、证书、systemd 服务等生产状态的操作，都必须先确认用户当前请求确实是在要求更新服务器。
 
+## 服务器部署流程
+
+- 服务器：`140.143.182.236`，SSH 私钥路径通常是 `C:\Users\datamesh-u3d\Downloads\Office.pem`，常用用户是 `ubuntu`。
+- 线上项目目录：`/opt/worldcup-assistant`；systemd 服务名：`worldcup-assistant`。
+- 部署前先在本地完成必要验证，例如：
+  ```powershell
+  .\.venv\Scripts\python.exe -m compileall backend
+  node --check app.js
+  node --check admin.js
+  git diff --check
+  ```
+- 部署时不要上传 `.env`、`data/worldcup.db`、日志、虚拟环境或本地临时脚本；线上 `.env` 和数据库默认保留服务器现状。
+- 推荐流程：
+  1. 本地确认 `git status --short`，只打包需要上线的代码和静态资源。
+  2. 通过 SSH 连接服务器，在 `/opt/worldcup-assistant` 下先备份当前版本或确认可回退版本。
+  3. 上传代码包到服务器临时目录，解压/同步到 `/opt/worldcup-assistant`，保留线上 `.env`、数据库和日志目录。
+  4. 如依赖文件变更，再在线上虚拟环境安装依赖；没有依赖变更则跳过。
+  5. 执行 `sudo systemctl restart worldcup-assistant` 重启服务。
+  6. 执行 `sudo systemctl status worldcup-assistant --no-pager` 和 `journalctl -u worldcup-assistant -n 80 --no-pager` 检查服务状态与错误日志。
+  7. 访问 `http://140.143.182.236/worldcup/` 和 `http://140.143.182.236/worldcup/admin` 做冒烟验证。
+- 当前域名备案完成前，线上访问以 HTTP IP 路径为准；不要主动恢复 443/SSL 配置。等用户明确说域名备案完成并要求恢复证书后，再调整 Nginx/证书。
+- 如果部署失败，优先停止继续改动，读取 systemd 日志定位原因；需要回退时恢复部署前备份版本并重启服务。
+
 ## DeepSeek 调试规则
 
 - 调试 DeepSeek API 时，可以直接调用真实 DeepSeek API 做验证，不需要刻意节省 token。
@@ -41,7 +64,7 @@
 - 标题不要围绕“比赛日开始”。当前策略只保留热点热度：高关注球队 + 最高冷门风险场 + 球队修饰词。可用修饰词包括：`桑巴军团`、`德国战车`、`高卢雄鸡`、`斗牛士军团`、`橙衣军团`、`三狮军团`、`五盾军团`、`潘帕斯雄鹰`、`欧洲红魔`、`格子军团`、`瑞士军刀`、`蓝武士`、`太极虎`、`东道主墨西哥`。
 - 标题示例：`6月12日世界杯前瞻：德国战车登场，橙衣军团碰蓝武士，科特迪瓦vs厄瓜多尔最悬`。不要写成 `6月12日赛事世界杯前瞻` 或 `墨西哥打响首战` 这类平标题。
 - 当前公众号 HTML 样式采用 A17/A15 方向：白底正文、PNG 透明圆角标题图、金色日期时间和金色小标题。不要使用整篇深色背景，微信深色模式会自动改色；不要使用 `background-image`、负边距、table 或大 `min-height` 做公众号正文布局。
-- 正文标题图默认使用 `assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`，推草稿时会调用微信 `media/uploadimg` 上传正文图片并把正文里的本地预览地址替换成微信图片 URL；这和封面 `WECHAT_DEFAULT_COVER_MEDIA_ID` 是两件事，标题图不需要手动上传到素材库。
+- 正文标题图默认使用 `assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`，推草稿时优先使用 `.env` 的 `WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL` 替换正文图片地址；未配置时才调用微信 `media/uploadimg` 现场上传。正文标题图和封面 `WECHAT_DEFAULT_COVER_MEDIA_ID` 是两件事，标题图不能直接使用素材库 `media_id`。
 - 每个比赛日只保留最新一篇公众号每日前瞻。新文章保存成功后，会清理同一 `matchday` 下的旧版本，避免后台长期堆积 v1/v2/v3 调试历史。
 - Admin 里的比赛日选择使用 `/api/admin/matchdays` 返回的下拉选项，不要让用户手填日期。内部 `matchday` 仍使用北京时间中午 12:00 到次日 11:59 的赛事日规则。
 - 如果某场没有 published report，只能写“报告待更新”，不能编造球员、伤停、赔率、历史战绩或分析。
@@ -50,9 +73,9 @@
 ## 图片与封面资源
 
 - 当前 Git 仓库已存放公众号正文标题图：`assets/wechat-article-hero-card.png`，这是带透明圆角的 PNG，不能替换回 JPG，否则微信草稿里圆角可能失效。
-- 微信 HTML 正文顶部标题图由 `backend/wechat_article.py` 的 `_render_html_poster()` 渲染。后台预览使用 `/static/assets/wechat-article-hero-card.png`；推草稿时后端会自动调用微信 `media/uploadimg` 上传正文图片并替换为微信图片 URL。
-- 公众号封面图和正文标题图是两件事：封面仍使用 `.env` 的 `WECHAT_DEFAULT_COVER_MEDIA_ID` 指向微信公众号素材库固定封面；正文标题图不需要管理员手动上传素材库。
-- 其他机器拉取代码后，只要 `assets/wechat-article-hero-card.png` 存在且 `.env` 中的 `WECHAT_ARTICLE_HERO_IMAGE_PATH` / `WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL` 没有指向不存在的路径，正文标题图就能在本地预览和推草稿时正常加载。
+- 微信 HTML 正文顶部标题图由 `backend/wechat_article.py` 的 `_render_html_poster()` 渲染。后台预览使用 `/static/assets/wechat-article-hero-card.png`；推草稿时后端优先复用 `WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL`，避免每日任务反复上传正文图片。
+- 公众号封面图和正文标题图是两件事：封面仍使用 `.env` 的 `WECHAT_DEFAULT_COVER_MEDIA_ID` 指向微信公众号素材库固定封面；正文标题图使用微信正文图片 URL，不使用素材库 `media_id`。
+- 其他机器拉取代码后，只要 `assets/wechat-article-hero-card.png` 存在，`.env` 中的 `WECHAT_ARTICLE_HERO_IMAGE_PATH` / `WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL` 没有指向不存在的路径，本地预览就能正常加载；若要稳定推草稿，应同步配置 `WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL`。
 
 ## 其他端拉取运行
 
