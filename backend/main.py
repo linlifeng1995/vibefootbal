@@ -31,6 +31,7 @@ FRONTEND_DIR = ROOT
 ADMIN_TOKEN_DEFAULT = "change-me"
 CN_TZ = ZoneInfo("Asia/Shanghai")
 SCHEDULER: BackgroundScheduler | None = None
+MATCH_VISIBLE_AFTER_KICKOFF = timedelta(hours=2)
 
 load_dotenv(ROOT / ".env")
 
@@ -54,6 +55,10 @@ def matchday_key(kickoff: str) -> str:
     return (local_dt(kickoff) - timedelta(hours=12)).date().isoformat()
 
 
+def calendar_day_key(kickoff: str) -> str:
+    return local_dt(kickoff).date().isoformat()
+
+
 def matchday_label(key: str) -> str:
     day = datetime.fromisoformat(f"{key}T00:00:00").date()
     return f"{day.month}月{day.day}日赛事"
@@ -63,6 +68,23 @@ def matchday_range(key: str) -> dict[str, str]:
     start = datetime.fromisoformat(f"{key}T12:00:00").replace(tzinfo=CN_TZ)
     end = start + timedelta(days=1) - timedelta(minutes=1)
     return {"start": start.isoformat(), "end": end.isoformat()}
+
+
+def calendar_day_label(key: str) -> str:
+    day = datetime.fromisoformat(f"{key}T00:00:00").date()
+    return f"{day.month}\u6708{day.day}\u65e5\u8d5b\u7a0b"
+
+
+def calendar_day_range(key: str) -> dict[str, str]:
+    start = datetime.fromisoformat(f"{key}T00:00:00").replace(tzinfo=CN_TZ)
+    end = start + timedelta(days=1) - timedelta(minutes=1)
+    return {"start": start.isoformat(), "end": end.isoformat()}
+
+
+def prematch_window_label(start: datetime, end: datetime) -> str:
+    if start.hour >= 12:
+        return f"{start.month}\u6708{start.day}\u65e5\u665a\u81f3{end.month}\u6708{end.day}\u65e5\u4e0a\u5348\u8d5b\u524d\u60c5\u62a5"
+    return f"{start.month}\u6708{start.day}\u65e5\u4e0a\u5348\u8d5b\u524d\u60c5\u62a5"
 
 
 def env(name: str, default: str = "") -> str:
@@ -514,8 +536,7 @@ def execute_job_kind(kind: str) -> dict[str, Any]:
         update_data_status("prematch_reports", "临场赛前情报", status, summary, "scheduler", {"reportIds": generated})
         return {"message": summary, "count": len(generated)}
     if kind == "wechat_daily_preview":
-        groups = grouped_matchdays(query_public_matches())
-        group = next((item for item in groups if item.get("items")), None)
+        group = default_article_matchday(query_public_matches())
         if not group:
             update_data_status("wechat_daily_preview", "WeChat daily preview", "idle", "No matchday available", "scheduler")
             return {"message": "No matchday available", "count": 0}
@@ -681,7 +702,7 @@ async def research_match_sources(match_id: str, limit: int = 8) -> list[dict[str
     return saved
 
 
-SEED_VERSION = "2026-official-groups-v1"
+SEED_VERSION = "2026-official-fixtures-v4"
 
 
 TEAM_PLAYER_PROFILES: dict[str, dict[str, Any]] = {
@@ -924,6 +945,193 @@ def seed_group_map() -> dict[str, list[str]]:
 
 
 def seed_match_rows() -> list[tuple[str, str, str, str, str, str, list[str]]]:
+    group_map = seed_group_map()
+    team_group = {team_id: group_name for group_name, team_ids in group_map.items() for team_id in team_ids}
+    london_tz = ZoneInfo("Europe/London")
+    tags = ["\u5c0f\u7ec4\u8d5b", "\u5317\u4eac\u65f6\u95f4", "\u8d5b\u7a0b\u6821\u51c6"]
+    fixtures_bst = [
+        ("mexico", "south-africa", 6, 11, 20, 0),
+        ("south-korea", "czechia", 6, 12, 3, 0),
+        ("canada", "bosnia", 6, 12, 20, 0),
+        ("usa", "paraguay", 6, 13, 2, 0),
+        ("qatar", "switzerland", 6, 13, 20, 0),
+        ("brazil", "morocco", 6, 13, 23, 0),
+        ("haiti", "scotland", 6, 14, 2, 0),
+        ("australia", "turkey", 6, 14, 5, 0),
+        ("germany", "curacao", 6, 14, 18, 0),
+        ("netherlands", "japan", 6, 14, 21, 0),
+        ("ivory-coast", "ecuador", 6, 15, 0, 0),
+        ("sweden", "tunisia", 6, 15, 3, 0),
+        ("spain", "cape-verde", 6, 15, 17, 0),
+        ("belgium", "egypt", 6, 15, 20, 0),
+        ("saudi-arabia", "uruguay", 6, 15, 23, 0),
+        ("iran", "new-zealand", 6, 16, 2, 0),
+        ("france", "senegal", 6, 16, 20, 0),
+        ("iraq", "norway", 6, 16, 23, 0),
+        ("argentina", "algeria", 6, 17, 2, 0),
+        ("austria", "jordan", 6, 17, 5, 0),
+        ("portugal", "dr-congo", 6, 17, 18, 0),
+        ("england", "croatia", 6, 17, 21, 0),
+        ("ghana", "panama", 6, 18, 0, 0),
+        ("uzbekistan", "colombia", 6, 18, 3, 0),
+        ("czechia", "south-africa", 6, 18, 17, 0),
+        ("switzerland", "bosnia", 6, 18, 20, 0),
+        ("canada", "qatar", 6, 18, 23, 0),
+        ("mexico", "south-korea", 6, 19, 2, 0),
+        ("usa", "australia", 6, 19, 20, 0),
+        ("scotland", "morocco", 6, 19, 23, 0),
+        ("brazil", "haiti", 6, 20, 1, 30),
+        ("turkey", "paraguay", 6, 20, 4, 0),
+        ("netherlands", "sweden", 6, 20, 18, 0),
+        ("germany", "ivory-coast", 6, 20, 21, 0),
+        ("ecuador", "curacao", 6, 21, 1, 0),
+        ("tunisia", "japan", 6, 21, 5, 0),
+        ("spain", "saudi-arabia", 6, 21, 17, 0),
+        ("belgium", "iran", 6, 21, 20, 0),
+        ("uruguay", "cape-verde", 6, 21, 23, 0),
+        ("new-zealand", "egypt", 6, 22, 2, 0),
+        ("argentina", "austria", 6, 22, 18, 0),
+        ("france", "iraq", 6, 22, 22, 0),
+        ("norway", "senegal", 6, 23, 1, 0),
+        ("jordan", "algeria", 6, 23, 4, 0),
+        ("portugal", "uzbekistan", 6, 23, 18, 0),
+        ("england", "ghana", 6, 23, 21, 0),
+        ("panama", "croatia", 6, 24, 0, 0),
+        ("colombia", "dr-congo", 6, 24, 3, 0),
+        ("switzerland", "canada", 6, 24, 20, 0),
+        ("bosnia", "qatar", 6, 24, 20, 0),
+        ("morocco", "haiti", 6, 24, 23, 0),
+        ("scotland", "brazil", 6, 24, 23, 0),
+        ("south-africa", "south-korea", 6, 25, 2, 0),
+        ("czechia", "mexico", 6, 25, 2, 0),
+        ("curacao", "ivory-coast", 6, 25, 21, 0),
+        ("ecuador", "germany", 6, 25, 21, 0),
+        ("japan", "sweden", 6, 26, 0, 0),
+        ("tunisia", "netherlands", 6, 26, 0, 0),
+        ("paraguay", "australia", 6, 26, 3, 0),
+        ("turkey", "usa", 6, 26, 3, 0),
+        ("norway", "france", 6, 26, 20, 0),
+        ("senegal", "iraq", 6, 26, 20, 0),
+        ("cape-verde", "saudi-arabia", 6, 27, 1, 0),
+        ("uruguay", "spain", 6, 27, 1, 0),
+        ("egypt", "iran", 6, 27, 4, 0),
+        ("new-zealand", "belgium", 6, 27, 4, 0),
+        ("croatia", "ghana", 6, 27, 22, 0),
+        ("panama", "england", 6, 27, 22, 0),
+        ("colombia", "portugal", 6, 28, 0, 30),
+        ("dr-congo", "uzbekistan", 6, 28, 0, 30),
+        ("algeria", "austria", 6, 28, 3, 0),
+        ("jordan", "argentina", 6, 28, 3, 0),
+    ]
+    venues_by_fixture = {
+        ("mexico", "south-africa"): "Mexico City Stadium",
+        ("south-korea", "czechia"): "Estadio Guadalajara",
+        ("canada", "bosnia"): "Toronto Stadium",
+        ("usa", "paraguay"): "Los Angeles Stadium",
+        ("qatar", "switzerland"): "San Francisco Bay Area Stadium",
+        ("brazil", "morocco"): "New York New Jersey Stadium",
+        ("haiti", "scotland"): "Boston Stadium",
+        ("australia", "turkey"): "BC Place Vancouver",
+        ("germany", "curacao"): "Houston Stadium",
+        ("netherlands", "japan"): "Dallas Stadium",
+        ("ivory-coast", "ecuador"): "Philadelphia Stadium",
+        ("sweden", "tunisia"): "Estadio Monterrey",
+        ("spain", "cape-verde"): "Atlanta Stadium",
+        ("belgium", "egypt"): "Seattle Stadium",
+        ("saudi-arabia", "uruguay"): "Miami Stadium",
+        ("iran", "new-zealand"): "Los Angeles Stadium",
+        ("france", "senegal"): "New York New Jersey Stadium",
+        ("iraq", "norway"): "Boston Stadium",
+        ("argentina", "algeria"): "Kansas City Stadium",
+        ("austria", "jordan"): "San Francisco Bay Area Stadium",
+        ("portugal", "dr-congo"): "Houston Stadium",
+        ("england", "croatia"): "Dallas Stadium",
+        ("ghana", "panama"): "Toronto Stadium",
+        ("uzbekistan", "colombia"): "Mexico City Stadium",
+        ("czechia", "south-africa"): "Atlanta Stadium",
+        ("switzerland", "bosnia"): "Los Angeles Stadium",
+        ("canada", "qatar"): "BC Place Vancouver",
+        ("mexico", "south-korea"): "Estadio Guadalajara",
+        ("usa", "australia"): "Seattle Stadium",
+        ("scotland", "morocco"): "Boston Stadium",
+        ("brazil", "haiti"): "Philadelphia Stadium",
+        ("turkey", "paraguay"): "San Francisco Bay Area Stadium",
+        ("netherlands", "sweden"): "Houston Stadium",
+        ("germany", "ivory-coast"): "Toronto Stadium",
+        ("ecuador", "curacao"): "Kansas City Stadium",
+        ("tunisia", "japan"): "Estadio Monterrey",
+        ("spain", "saudi-arabia"): "Atlanta Stadium",
+        ("belgium", "iran"): "Los Angeles Stadium",
+        ("uruguay", "cape-verde"): "Miami Stadium",
+        ("new-zealand", "egypt"): "BC Place Vancouver",
+        ("argentina", "austria"): "Dallas Stadium",
+        ("france", "iraq"): "Philadelphia Stadium",
+        ("norway", "senegal"): "New York New Jersey Stadium",
+        ("jordan", "algeria"): "San Francisco Bay Area Stadium",
+        ("portugal", "uzbekistan"): "Houston Stadium",
+        ("england", "ghana"): "Boston Stadium",
+        ("panama", "croatia"): "Toronto Stadium",
+        ("colombia", "dr-congo"): "Estadio Guadalajara",
+        ("switzerland", "canada"): "BC Place Vancouver",
+        ("bosnia", "qatar"): "Seattle Stadium",
+        ("morocco", "haiti"): "Atlanta Stadium",
+        ("scotland", "brazil"): "Miami Stadium",
+        ("south-africa", "south-korea"): "Estadio Monterrey",
+        ("czechia", "mexico"): "Mexico City Stadium",
+        ("curacao", "ivory-coast"): "Philadelphia Stadium",
+        ("ecuador", "germany"): "New York New Jersey Stadium",
+        ("japan", "sweden"): "Dallas Stadium",
+        ("tunisia", "netherlands"): "Kansas City Stadium",
+        ("paraguay", "australia"): "San Francisco Bay Area Stadium",
+        ("turkey", "usa"): "Los Angeles Stadium",
+        ("norway", "france"): "Boston Stadium",
+        ("senegal", "iraq"): "Toronto Stadium",
+        ("cape-verde", "saudi-arabia"): "Houston Stadium",
+        ("uruguay", "spain"): "Estadio Guadalajara",
+        ("egypt", "iran"): "Seattle Stadium",
+        ("new-zealand", "belgium"): "BC Place Vancouver",
+        ("croatia", "ghana"): "Philadelphia Stadium",
+        ("panama", "england"): "New York New Jersey Stadium",
+        ("colombia", "portugal"): "Miami Stadium",
+        ("dr-congo", "uzbekistan"): "Atlanta Stadium",
+        ("algeria", "austria"): "Kansas City Stadium",
+        ("jordan", "argentina"): "Dallas Stadium",
+    }
+    venue_names_zh = {
+        "Atlanta Stadium": "\u4e9a\u7279\u5170\u5927\u4f53\u80b2\u573a",
+        "BC Place Vancouver": "\u6e29\u54e5\u534e\u5351\u8bd7\u4f53\u80b2\u9986",
+        "Boston Stadium": "\u6ce2\u58eb\u987f\u4f53\u80b2\u573a",
+        "Dallas Stadium": "\u8fbe\u62c9\u65af\u4f53\u80b2\u573a",
+        "Estadio Guadalajara": "\u74dc\u8fbe\u62c9\u54c8\u62c9\u4f53\u80b2\u573a",
+        "Estadio Monterrey": "\u8499\u7279\u96f7\u4f53\u80b2\u573a",
+        "Houston Stadium": "\u4f11\u65af\u6566\u4f53\u80b2\u573a",
+        "Kansas City Stadium": "\u582a\u8428\u65af\u57ce\u4f53\u80b2\u573a",
+        "Los Angeles Stadium": "\u6d1b\u6749\u77f6\u4f53\u80b2\u573a",
+        "Mexico City Stadium": "\u58a8\u897f\u54e5\u57ce\u4f53\u80b2\u573a",
+        "Miami Stadium": "\u8fc8\u963f\u5bc6\u4f53\u80b2\u573a",
+        "New York New Jersey Stadium": "\u7ebd\u7ea6/\u65b0\u6cfd\u897f\u4f53\u80b2\u573a",
+        "Philadelphia Stadium": "\u8d39\u57ce\u4f53\u80b2\u573a",
+        "San Francisco Bay Area Stadium": "\u65e7\u91d1\u5c71\u6e7e\u533a\u4f53\u80b2\u573a",
+        "Seattle Stadium": "\u897f\u96c5\u56fe\u4f53\u80b2\u573a",
+        "Toronto Stadium": "\u591a\u4f26\u591a\u4f53\u80b2\u573a",
+    }
+    fixtures: list[tuple[str, str, str, str, str, str, list[str]]] = []
+    for match_no, (home_id, away_id, month, day, hour, minute) in enumerate(fixtures_bst, start=1):
+        kickoff = datetime(2026, month, day, hour, minute, tzinfo=london_tz).astimezone(CN_TZ)
+        venue = venues_by_fixture[(home_id, away_id)]
+        fixtures.append(
+            (
+                f"seed-{match_no:03d}-{home_id[:3]}-{away_id[:3]}",
+                home_id,
+                away_id,
+                kickoff.isoformat(),
+                team_group.get(home_id, ""),
+                venue_names_zh[venue],
+                tags,
+            )
+        )
+    return fixtures
+
     venues = [
         "墨西哥城", "洛杉矶", "温哥华", "休斯敦", "纽约", "多伦多",
         "达拉斯", "迈阿密", "西雅图", "亚特兰大", "旧金山", "堪萨斯城",
@@ -1081,21 +1289,142 @@ def poisson_probability(goals: int, expected_goals: float) -> float:
     return math.exp(-expected_goals) * expected_goals**goals / math.factorial(goals)
 
 
-def score_and_totals_prediction(bundle: dict[str, Any], probs: dict[str, float]) -> dict[str, Any]:
+KIMI_MODEL_METHOD = {
+    "name": "Kimi 2026 World Cup Report inspired ensemble",
+    "single_match_layers": [
+        "Elo/基础评分层：使用评分差、赛地/主场修正构造基础胜率。",
+        "状态层：使用近期状态、攻防状态做短期动量修正。",
+        "Poisson/Dixon-Coles比分层：用预期进球矩阵推导胜平负与比分，低比分平局做相关性修正。",
+        "外部共识校准层：如有赛前外部参考信号，仅作为概率稳定器参与融合。",
+        "不确定性层：用模型分歧、数据完整度和足球随机性降低置信度，避免过度自信。",
+    ],
+    "champion_layers": [
+        "球队评分、近期状态、攻防平衡构成基础强度。",
+        "淘汰赛韧性、进攻上限、阵容/战术容错影响深轮次路径。",
+        "基准/乐观/悲观三情景近似蒙特卡洛路径模拟。",
+        "外部共识只作校准，不直接决定冠军榜。",
+    ],
+    "deepseek_rule": "DeepSeek必须按该框架解释胜率、比分和冠军率；不得脱离 prediction 中的数值重新编造概率。",
+}
+
+
+def model_method_note(prediction: dict[str, Any] | None = None) -> str:
+    prediction = prediction or {}
+    outputs = prediction.get("model_outputs") or {}
+    dispersion = outputs.get("dispersion")
+    dispersion_text = f"当前多模型分歧约 {dispersion} 个百分点。" if dispersion is not None else ""
+    return (
+        "计算采用报告方法论的分层集成：Elo/基础评分层处理长期强度，近期状态层处理短期动量，"
+        "攻防匹配层比较进攻与防守稳定性，Poisson/Dixon-Coles比分层校验进球分布，"
+        "外部校准信号只作为概率稳定器，最后用多模型分歧和足球随机性调整置信度。"
+        f"{dispersion_text}这些概率适合理解为赛前分布，不是确定性结论。"
+    )
+
+
+def normalize_probabilities(values: dict[str, float]) -> dict[str, float]:
+    total = sum(max(0, float(value)) for value in values.values()) or 1
+    return {key: max(0, float(value)) / total * 100 for key, value in values.items()}
+
+
+def three_way_from_edge(edge: float, draw_anchor: float = 0.27) -> dict[str, float]:
+    home_strength = 1 / (1 + math.exp(-edge))
+    draw = max(0.18, min(0.34, draw_anchor - abs(edge) * 0.035))
+    away_strength = 1 - home_strength
+    return normalize_probabilities(
+        {
+            "home": home_strength * (1 - draw) * 100,
+            "draw": draw * 100,
+            "away": away_strength * (1 - draw) * 100,
+        }
+    )
+
+
+def weighted_probability_ensemble(models: list[tuple[dict[str, float], float]], shrink: float = 0.05) -> dict[str, float]:
+    combined = {"home": 0.0, "draw": 0.0, "away": 0.0}
+    weight_total = sum(weight for _, weight in models) or 1
+    for model, weight in models:
+        normalized = normalize_probabilities(model)
+        for key in combined:
+            combined[key] += normalized[key] * weight / weight_total
+    prior = 100 / 3
+    calibrated = {key: combined[key] * (1 - shrink) + prior * shrink for key in combined}
+    return {key: round(value, 1) for key, value in normalize_probabilities(calibrated).items()}
+
+
+def probability_dispersion(models: list[dict[str, float]]) -> float:
+    if len(models) < 2:
+        return 0.0
+    deviations = []
+    for key in ("home", "draw", "away"):
+        values = [normalize_probabilities(model)[key] for model in models]
+        mean = sum(values) / len(values)
+        deviations.append(math.sqrt(sum((value - mean) ** 2 for value in values) / len(values)))
+    return round(max(deviations), 1)
+
+
+def expected_goals_estimate(bundle: dict[str, Any], probs: dict[str, float] | None = None) -> dict[str, float]:
     attack_home = float(bundle["home_attack"] or 5.8)
     defense_home = float(bundle["home_defense"] or 5.8)
     attack_away = float(bundle["away_attack"] or 5.8)
     defense_away = float(bundle["away_defense"] or 5.8)
     rating_gap = float(bundle["home_rating"]) - float(bundle["away_rating"])
+    form_gap = float(bundle["home_form"] or 0) - float(bundle["away_form"] or 0)
+    venue_boost = 48 if "主场" in "".join(bundle["tags"]) or bundle["home_name"] in bundle["venue"] else 0
     tempo = 2.45 + (attack_home + attack_away - 11.6) * 0.09 - (defense_home + defense_away - 11.6) * 0.045
-    edge = (probs["home"] - probs["away"]) / 100 + rating_gap / 1800
+    probability_edge = ((probs["home"] - probs["away"]) / 100) if probs else 0
+    edge = probability_edge + rating_gap / 1800 + form_gap * 0.018 + venue_boost / 1550
     home_xg = max(0.45, min(3.1, tempo / 2 + edge * 0.85 + (attack_home - defense_away) * 0.08))
     away_xg = max(0.35, min(2.8, tempo - home_xg + (attack_away - defense_home) * 0.06))
+    return {"home": home_xg, "away": away_xg}
+
+
+def dixon_coles_low_score_adjustment(home_goals: int, away_goals: int, home_xg: float, away_xg: float, rho: float = -0.05) -> float:
+    if home_goals == 0 and away_goals == 0:
+        return max(0.75, 1 - home_xg * away_xg * rho)
+    if home_goals == 0 and away_goals == 1:
+        return max(0.75, 1 + home_xg * rho)
+    if home_goals == 1 and away_goals == 0:
+        return max(0.75, 1 + away_xg * rho)
+    if home_goals == 1 and away_goals == 1:
+        return max(0.75, 1 - rho)
+    return 1.0
+
+
+def poisson_match_matrix(home_xg: float, away_xg: float, max_goals: int = 7) -> list[dict[str, Any]]:
+    matrix = []
+    for home_goals in range(max_goals + 1):
+        for away_goals in range(max_goals + 1):
+            probability = (
+                poisson_probability(home_goals, home_xg)
+                * poisson_probability(away_goals, away_xg)
+                * dixon_coles_low_score_adjustment(home_goals, away_goals, home_xg, away_xg)
+            )
+            matrix.append({"home": home_goals, "away": away_goals, "score": f"{home_goals}-{away_goals}", "probability": probability})
+    total = sum(item["probability"] for item in matrix) or 1
+    for item in matrix:
+        item["probability"] = item["probability"] / total
+    return matrix
+
+
+def poisson_result_probabilities(home_xg: float, away_xg: float) -> dict[str, float]:
+    result = {"home": 0.0, "draw": 0.0, "away": 0.0}
+    for item in poisson_match_matrix(home_xg, away_xg):
+        if item["home"] > item["away"]:
+            result["home"] += item["probability"]
+        elif item["home"] == item["away"]:
+            result["draw"] += item["probability"]
+        else:
+            result["away"] += item["probability"]
+    return {key: value * 100 for key, value in result.items()}
+
+
+def score_and_totals_prediction(bundle: dict[str, Any], probs: dict[str, float]) -> dict[str, Any]:
+    xg = expected_goals_estimate(bundle, probs)
+    home_xg = xg["home"]
+    away_xg = xg["away"]
     score_candidates: list[dict[str, Any]] = []
-    for home_goals in range(6):
-        for away_goals in range(6):
-            probability = poisson_probability(home_goals, home_xg) * poisson_probability(away_goals, away_xg)
-            score_candidates.append({"score": f"{home_goals}-{away_goals}", "probability": probability})
+    for item in poisson_match_matrix(home_xg, away_xg):
+        score_candidates.append({"score": item["score"], "probability": item["probability"]})
     score_candidates.sort(key=lambda item: item["probability"], reverse=True)
     primary = score_candidates[0]
     alternatives = [item["score"] for item in score_candidates[1:4]]
@@ -1183,39 +1512,51 @@ def calculate_prediction(bundle: dict[str, Any]) -> dict[str, Any]:
     attack_gap = float(bundle["home_attack"] or 0) - float(bundle["away_defense"] or 0)
     defense_gap = float(bundle["home_defense"] or 0) - float(bundle["away_attack"] or 0)
     venue_boost = 48 if "主场" in "".join(bundle["tags"]) or bundle["home_name"] in bundle["venue"] else 0
-    model_edge = rating_gap / 400 + form_gap * 0.055 + attack_gap * 0.04 + defense_gap * 0.025 + venue_boost / 400
-
-    model_home = 1 / (1 + math.exp(-model_edge))
-    model_draw = max(0.18, min(0.32, 0.27 - abs(model_edge) * 0.04))
-    model_away = 1 - model_home
-    base = {
-        "home": model_home * (1 - model_draw) * 100,
-        "draw": model_draw * 100,
-        "away": model_away * (1 - model_draw) * 100,
-    }
+    elo_model = three_way_from_edge((rating_gap + venue_boost) / 600, 0.275)
+    form_model = three_way_from_edge(rating_gap / 760 + form_gap * 0.095 + venue_boost / 720, 0.285)
+    matchup_model = three_way_from_edge(rating_gap / 820 + attack_gap * 0.105 + defense_gap * 0.075 + venue_boost / 820, 0.265)
+    poisson_xg = expected_goals_estimate(bundle)
+    poisson_model = poisson_result_probabilities(poisson_xg["home"], poisson_xg["away"])
 
     odds_implied = {"home": None, "draw": None, "away": None}
+    ensemble_models: list[tuple[dict[str, float], float]] = [
+        (elo_model, 0.31),
+        (form_model, 0.18),
+        (matchup_model, 0.23),
+        (poisson_model, 0.28),
+    ]
+    model_outputs = [elo_model, form_model, matchup_model, poisson_model]
     if bundle["odds"]:
         odds_implied = jload(bundle["odds"]["implied_json"], odds_implied)
-        for key in ("home", "draw", "away"):
-            if odds_implied.get(key) is not None:
-                base[key] = base[key] * 0.58 + float(odds_implied[key]) * 0.42
+        if all(odds_implied.get(key) is not None for key in ("home", "draw", "away")):
+            market_model = {key: float(odds_implied[key]) for key in ("home", "draw", "away")}
+            ensemble_models = [
+                (elo_model, 0.23),
+                (form_model, 0.14),
+                (matchup_model, 0.18),
+                (poisson_model, 0.23),
+                (market_model, 0.22),
+            ]
+            model_outputs.append(market_model)
 
-    total = sum(base.values()) or 1
-    probs = {key: round(value / total * 100, 1) for key, value in base.items()}
+    probs = weighted_probability_ensemble(ensemble_models, shrink=0.04 if bundle["odds"] else 0.07)
     favorite = max(probs, key=probs.get)
     underdog_prob = min(probs["home"], probs["away"])
-    upset_index = round(100 - probs[favorite] + underdog_prob * 0.35, 1)
-    confidence = round(min(91, max(42, 54 + abs(probs["home"] - probs["away"]) * 0.55 + (8 if bundle["odds"] else 0))), 1)
+    dispersion = probability_dispersion(model_outputs)
+    structural_noise = 6.0
+    upset_index = round(100 - probs[favorite] + underdog_prob * 0.35 + dispersion * 0.22, 1)
+    confidence = round(min(90, max(40, 58 + abs(probs["home"] - probs["away"]) * 0.42 + (5 if bundle["odds"] else 0) - dispersion * 0.45 - structural_noise * 0.35)), 1)
     score_totals = score_and_totals_prediction(bundle, probs)
-    model_weight = 58 if bundle["odds"] else 100
-    market_weight = 42 if bundle["odds"] else 0
+    model_weight = 78 if bundle["odds"] else 100
+    market_weight = 22 if bundle["odds"] else 0
 
     factors = [
-        {"name": "球队基础评分", "homeImpact": round(rating_gap / 20, 1), "awayImpact": round(-rating_gap / 20, 1), "detail": f"{bundle['home_name']} 与 {bundle['away_name']} 的评分差为 {round(rating_gap, 1)}。"},
-        {"name": "近期状态", "homeImpact": round(form_gap, 1), "awayImpact": round(-form_gap, 1), "detail": "使用最近表现分、攻防状态做加权。"},
-        {"name": "攻防匹配", "homeImpact": round(attack_gap + defense_gap, 1), "awayImpact": round(-(attack_gap + defense_gap), 1), "detail": "比较进攻强度与对手防守稳定性。"},
-        {"name": "综合校准", "homeImpact": odds_implied.get("home"), "awayImpact": odds_implied.get("away"), "detail": "如有可用外部参考信号，会作为赛前先验参与最终校准。"},
+        {"name": "基础评分", "homeImpact": round(rating_gap / 20, 1), "awayImpact": round(-rating_gap / 20, 1), "detail": f"{bundle['home_name']}与{bundle['away_name']}的整体强度对比，赛地因素已计入。"},
+        {"name": "近期状态", "homeImpact": round(form_gap, 1), "awayImpact": round(-form_gap, 1), "detail": "观察近期表现、比赛强度和进入状态的速度。"},
+        {"name": "攻防匹配", "homeImpact": round(attack_gap + defense_gap, 1), "awayImpact": round(-(attack_gap + defense_gap), 1), "detail": "比较一方推进质量与另一方防守承压能力。"},
+        {"name": "进球走势", "homeImpact": round(poisson_model["home"], 1), "awayImpact": round(poisson_model["away"], 1), "detail": f"结合攻防效率后，本场更接近 {score_totals['score']['primary']} 的比分区间。"},
+        {"name": "综合校准", "homeImpact": odds_implied.get("home"), "awayImpact": odds_implied.get("away"), "detail": "如有可用外部参考信号，会作为赛前先验参与最终校准，但不直接替代模型输出。"},
+        {"name": "不确定性", "homeImpact": round(dispersion, 1), "awayImpact": round(structural_noise, 1), "detail": "根据多模型分歧与足球固有随机性调整置信度，避免把点估计写成确定性结论。"},
     ]
     return {
         "home_win": probs["home"],
@@ -1226,41 +1567,121 @@ def calculate_prediction(bundle: dict[str, Any]) -> dict[str, Any]:
         "factors": factors,
         "odds_implied": odds_implied,
         "model_weights": {"model": model_weight, "market": market_weight},
+        "methodology": KIMI_MODEL_METHOD,
+        "model_outputs": {
+            "elo": {key: round(value, 1) for key, value in elo_model.items()},
+            "form": {key: round(value, 1) for key, value in form_model.items()},
+            "matchup": {key: round(value, 1) for key, value in matchup_model.items()},
+            "poisson": {key: round(value, 1) for key, value in poisson_model.items()},
+            "dispersion": dispersion,
+        },
         "score_prediction": score_totals["score"],
         "totals_prediction": score_totals["totals"],
     }
 
 
 def model_logic_note(bundle: dict[str, Any], prediction: dict[str, Any]) -> str:
+    return public_match_logic(bundle, prediction)
+
+
+def public_match_logic(bundle: dict[str, Any], prediction: dict[str, Any]) -> str:
     home = bundle["home_name"]
     away = bundle["away_name"]
-    rating_gap = float(bundle["home_rating"]) - float(bundle["away_rating"])
-    form_gap = float(bundle["home_form"] or 0) - float(bundle["away_form"] or 0)
-    home_attack_vs_away_defense = float(bundle["home_attack"] or 0) - float(bundle["away_defense"] or 0)
-    away_attack_vs_home_defense = float(bundle["away_attack"] or 0) - float(bundle["home_defense"] or 0)
-    venue_boost = 48 if "主场" in "".join(bundle["tags"]) or home in bundle["venue"] else 0
-    calibration_text = "当前没有可用外部校准信号，胜平负来自基础分数计算。"
-    odds = prediction.get("odds_implied") or {}
-    if any(odds.get(key) is not None for key in ("home", "draw", "away")):
-        calibration_text = "胜平负概率在基础分数之外加入了赛前外部信号校准，校准项只作为概率稳定器，不作为单独结论展示。"
-    venue_text = f"赛地/主场修正约 +{venue_boost} 模型点。" if venue_boost else "赛地没有给主队明显额外加成。"
-    return (
-        f"计算逻辑先把球队基础评分、近期状态、攻防匹配和赛地因素合成为赛前强度差："
-        f"{home}相对{away}的基础评分差为 {rating_gap:+.0f}，近期状态差为 {form_gap:+.1f}，"
-        f"{home}进攻对{away}防守的匹配差为 {home_attack_vs_away_defense:+.1f}，"
-        f"{away}进攻对{home}防守的匹配差为 {away_attack_vs_home_defense:+.1f}，{venue_text}"
-        f"{calibration_text}"
-        f"归一化后得到 {home} 胜 {prediction['home_win']}%、平局 {prediction['draw']}%、{away} 胜 {prediction['away_win']}%。"
+    leader = home if prediction["home_win"] >= prediction["away_win"] else away
+    follower = away if leader == home else home
+    close_game = abs(prediction["home_win"] - prediction["away_win"]) < 12
+    score = prediction.get("score_prediction") or {}
+    primary_score = score.get("primary") or "低比分"
+    home_profile = bundle.get("home_profile") or {}
+    away_profile = bundle.get("away_profile") or {}
+    strength_suffixes = ("是核心优势", "是重要支撑", "是主要卖点", "非常鲜明")
+    home_strength = str(home_profile.get("strength") or "边路推进和中场对抗")
+    away_strength = str(away_profile.get("strength") or "防守组织和反击效率")
+    for suffix in strength_suffixes:
+        home_strength = home_strength.replace(suffix, "")
+        away_strength = away_strength.replace(suffix, "")
+    home_stars = "、".join(real_star_names(home_profile)[:2])
+    away_stars = "、".join(real_star_names(away_profile)[:2])
+    leader_strength = home_strength if leader == home else away_strength
+    follower_strength = away_strength if leader == home else home_strength
+    leader_stars = home_stars if leader == home else away_stars
+    follower_stars = away_stars if leader == home else home_stars
+    venue = str(bundle.get("venue") or "")
+    venue_clause = f"比赛地点在{venue}，开局适应和草皮节奏会影响前二十分钟的推进质量。" if venue else ""
+    lead_text = (
+        f"{leader}虽然略占主动，但优势没有拉开到可以轻松控局的程度"
+        if close_game
+        else f"{leader}的赛前主动权更明显"
     )
+    follower_plan = (
+        f"{follower}需要先把中路压缩住，减少被连续推进到禁区前沿的次数，再用转换速度和定位球寻找窗口。"
+        if close_game
+        else f"{follower}更现实的方案是降低比赛回合数，避免早早被迫拉开阵型。"
+    )
+    return (
+        f"{lead_text}，支撑点主要在{leader_strength}。"
+        f"{leader_stars + '的处理质量会直接影响前场连续性。' if leader_stars else ''}"
+        f"{venue_clause}"
+        f"比赛前段，{leader}需要把边路推进、二点球保护和禁区前沿接应连起来，避免控球只停留在外围。"
+        f"{follower_plan}"
+        f"{follower}的反制点在{follower_strength}，{follower_stars + '如果能在转换中拿到正面空间，' if follower_stars else '如果能在转换中拿到正面空间，'}就有机会把比赛从单向压制拖成来回拉扯。"
+        f"本场首选比分参考 {primary_score}，说明比赛更可能围绕先手球、定位球和下半场体能变化展开。"
+        f"如果{leader}迟迟打不开局面，{follower}会更有机会把节奏拖慢并把比赛带进胶着区间；"
+        f"如果早段出现进球，落后一方压上后留下的肋部和边后卫身后空间会成为下一阶段胜负手。"
+    )
+
+
+MODEL_JARGON_TERMS = (
+    "Elo",
+    "Poisson",
+    "Dixon",
+    "模型",
+    "校准",
+    "稳定器",
+    "外部信号",
+    "基础分数",
+    "基础评分差",
+    "归一化",
+    "分数分布",
+    "确定性结论",
+    "隐含概率",
+    "胜平负概率在",
+    "多模型",
+    "置信度",
+)
+
+
+def strip_model_jargon(text: Any) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    parts = [part.strip() for part in raw.replace("；", "。").split("。") if part.strip()]
+    kept = [part for part in parts if not any(term in part for term in MODEL_JARGON_TERMS)]
+    return "。".join(kept).strip("。") + ("。" if kept else "")
+
+
+def clamp_complete_sentences(text: str, limit: int = 900) -> str:
+    value = str(text or "").strip()
+    if len(value) <= limit:
+        return value
+    parts = [part.strip() for part in value.replace("；", "。").split("。") if part.strip()]
+    kept: list[str] = []
+    total = 0
+    for part in parts:
+        next_len = len(part) + 1
+        if kept and total + next_len > limit:
+            break
+        kept.append(part)
+        total += next_len
+    return "。".join(kept).strip("。") + ("。" if kept else "")
 
 
 def enrich_logic_text(content_logic: Any, bundle: dict[str, Any], prediction: dict[str, Any]) -> str:
-    note = model_logic_note(bundle, prediction)
-    return (
-        f"{note}"
-        "进一步看，领先方的优势来自更高的综合评分和更稳定的攻防闭环；落后一方仍可通过转换速度、定位球质量和比赛后段体能变化制造波动。"
-        "因此，这个概率更适合理解为赛前分数分布，而不是确定性结论。"
-    )
+    football_text = strip_model_jargon(content_logic)
+    fallback = public_match_logic(bundle, prediction)
+    if len(football_text) >= 80:
+        return clamp_complete_sentences(football_text)
+    return fallback
 
 
 def fallback_report(bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
@@ -1284,10 +1705,10 @@ def fallback_report(bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[
         "summary": f"{leader}在赛前评估中略占主动，但{follower}并非没有反制空间；本场关键在开局压迫、二点球保护和临场阵容完整度。",
         "logic": (
             f"{model_logic_note(bundle, prediction)}"
-            "这意味着本场不是单纯看基础评分，而是把强弱差、状态差、攻防错位、主场修正和赛前校准信号合在一起判断。"
             f"{leader}的优势主要来自更高的综合强度和更稳定的控场预期；{follower}的反制窗口则在转换速度、定位球和热门方久攻不下后的心理波动。"
             "如果赛前首发出现核心缺口，尤其是中轴线或边路速度点变化，胜平负分布需要重新计算。"
         ),
+        "calculation_method_note": model_method_note(prediction),
         "score_prediction": {
             **score,
             "analysis": (
@@ -1432,8 +1853,9 @@ async def deepseek_report(
             "away_key_players": bundle.get("away_profile", {}).get("stars", []),
         },
         "prediction": prediction,
+        "methodology": KIMI_MODEL_METHOD,
         "sources": sources,
-        "instruction": "请基于输入数据、模型已有足球知识和 sources 生成中文赛前分析，输出严格 JSON，字段为 summary, logic, score_prediction, totals_prediction, win_path, risk_points, key_matchups, player_spotlight, player_performance, injury_impact, player_status, lineup_notes, lineups, match_conditions, upset_conditions, data_confidence_note。logic 必须写得像模型分数计算说明，不要只说球队评分；需要具体解释 prediction.factors 中的球队基础评分、近期状态、攻防匹配、综合校准如何共同推到最终胜平负概率。logic 不要出现“赔率”“盘口”“市场”“模型端”“市场端”“去水”“隐含概率”“历史对阵”“球队身价”“开盘”等词，也不要写投注建议、套利、收益等表述。score_prediction 包含 primary, alternatives, homeXg, awayXg, confidence, analysis；score_prediction.analysis 可以提到首选比分和备选比分，但不要写期望进球、概率、赔率或盘口，要从球队攻防、关键球员、比赛节奏解释为什么倾向这个比分。totals_prediction 包含 line, pick, displayPick, overProbability, underProbability, source, analysis，其中 line、overProbability、underProbability、source 只作为内部计算字段，analysis 里严禁出现盘口、赔率、Bet365、参考线、概率、大球概率、小球概率等字样，只能从球队攻防、关键球员、比赛节奏、伤停和赛前条件解释进球数倾向。player_spotlight 是数组，每项包含 team,name,role,impact，标题语义是“球员分析”；name 只能是真实球员名，严禁用反击第一推进点、中卫防空核心、门将出球点、边路爆点、核心持球点等位置/能力描述冒充球员名。player_status 中没有明确伤停来源时写“暂无公布的伤停信息。”和“暂无公布的疑似缺阵信息。”，不要写主力框架可用评估、检索不到明确缺口等内部判断。lineups 包含 home, away, note；home/away 各包含 team, formation, confidence, players, note；players 为 8 到 11 项，每项包含 name, role, line，line 只能是 GK/DEF/MID/FWD。阵容如果官方首发已经发布或 sources 明确提到，confidence 写“正式”；否则 confidence 写“预测”，但可以基于模型已有知识给出具体预测球员，不要只用位置名占位。lineups.note 和 home/away.note 要清楚标记“官方首发未发布，目前为预测版。”或“官方首发已发布，当前为正式版。”。未在输入、sources 或模型可靠知识中出现的伤停不得编造。",
+        "instruction": "请基于输入数据、模型已有足球知识、methodology 和 sources 生成中文赛前分析，输出严格 JSON，字段为 summary, logic, score_prediction, totals_prediction, win_path, risk_points, key_matchups, player_spotlight, player_performance, injury_impact, player_status, lineup_notes, lineups, match_conditions, upset_conditions, data_confidence_note。prediction 中的 home_win/draw/away_win、score_prediction、totals_prediction 是最终模型输出，不得自行改写概率或另造胜率。logic 是面向普通球迷的胜负分析正文，必须写赛场内容：开局节奏、边路/中路推进、回防落位、定位球、二点球、体能、替补冲击、领先和落后后的比赛变化；不要解释模型方法，不要出现 Elo、Poisson、Dixon-Coles、模型、校准、稳定器、外部信号、基础分数、归一化、多模型、置信度、概率分布、确定性结论、赔率、盘口、市场、模型端、市场端、去水、隐含概率、历史对阵、球队身价、开盘等词，也不要写投注建议、套利、收益等表述。score_prediction 包含 primary, alternatives, homeXg, awayXg, confidence, analysis；score_prediction.analysis 可以提到首选比分和备选比分，但不要写概率、赔率或盘口，要从球队攻防、关键球员、比赛节奏解释为什么倾向这个比分。totals_prediction 包含 line, pick, displayPick, overProbability, underProbability, source, analysis，其中 line、overProbability、underProbability、source 只作为内部计算字段，analysis 里严禁出现盘口、赔率、Bet365、参考线、概率、大球概率、小球概率等字样，只能从球队攻防、关键球员、比赛节奏、伤停和赛前条件解释进球数倾向。player_spotlight 是数组，每项包含 team,name,role,impact，标题语义是“球员分析”；name 只能是真实球员名，严禁用反击第一推进点、中卫防空核心、门将出球点、边路爆点、核心持球点等位置/能力描述冒充球员名。player_status 中没有明确伤停来源时写“暂无公布的伤停信息。”和“暂无公布的疑似缺阵信息。”，不要写主力框架可用评估、检索不到明确缺口等内部判断。lineups 包含 home, away, note；home/away 各包含 team, formation, confidence, players, note；players 为 8 到 11 项，每项包含 name, role, line，line 只能是 GK/DEF/MID/FWD。阵容如果官方首发已经发布或 sources 明确提到，confidence 写“正式”；否则 confidence 写“预测”，但可以基于模型已有知识给出具体预测球员，不要只用位置名占位。lineups.note 和 home/away.note 要清楚标记“官方首发未发布，目前为预测版。”或“官方首发已发布，当前为正式版。”。未在输入、sources 或模型可靠知识中出现的伤停不得编造。",
     }
     thinking = thinking if thinking is not None else env("DEEPSEEK_THINKING", "enabled")
     reasoning_effort = reasoning_effort or env("DEEPSEEK_MATCH_REASONING_EFFORT", env("DEEPSEEK_REASONING_EFFORT", "medium"))
@@ -1471,6 +1893,7 @@ def normalize_report_content(content: dict[str, Any], bundle: dict[str, Any], pr
     content["score_prediction"] = {**fallback["score_prediction"], **content.get("score_prediction", {})}
     content["totals_prediction"] = {**fallback["totals_prediction"], **content.get("totals_prediction", {})}
     content["logic"] = enrich_logic_text(content.get("logic"), bundle, prediction)
+    content["calculation_method_note"] = model_method_note(prediction)
     content["player_spotlight"] = [
         item
         for item in content.get("player_spotlight", [])
@@ -1688,9 +2111,12 @@ async def deepseek_champion_analyses(
             "code": entry["code"],
             "championProbability": entry["championProbability"],
             "modelProbability": entry.get("modelProbability"),
+            "confidenceInterval": entry.get("confidenceInterval"),
+            "scenarioProbabilities": entry.get("scenarioProbabilities"),
             "tier": entry["tier"],
             "modelFactors": entry.get("modelFactors", {}),
-            "instruction": "为这支球队生成 4 到 5 句中文冠军前景分析，输出严格 JSON：{\"analysis\":\"...\"}。不要出现高于基准、低于基准、价值、赔率、市场、模型概率、评分、具体数值、小数等词；不要编造具体伤停；260 到 360 个中文字符，基于攻防平衡、近期状态、淘汰赛容错、阵容厚度、优势位置、小组压力和潜在风险展开。评分数字会由页面单独展示，分析只写足球层面的解释。",
+            "methodology": KIMI_MODEL_METHOD,
+            "instruction": "为这支球队生成 4 到 5 句中文冠军前景分析，输出严格 JSON：{\"analysis\":\"...\"}。必须按 methodology 的冠军率框架写：球队评分、近期状态、攻防平衡、淘汰赛韧性、进攻上限、阵容/战术容错、乐观/悲观情景和不确定性。不要出现高于基准、低于基准、价值、赔率、市场、模型概率、评分、具体数值、小数等词；不要编造具体伤停；260 到 360 个中文字符，基于攻防平衡、近期状态、淘汰赛容错、阵容厚度、优势位置、小组压力和潜在风险展开。评分数字会由页面单独展示，分析只写足球层面的解释。",
         }
         request_payload = {
             "model": model,
@@ -1746,6 +2172,7 @@ def generate_champion_prediction(
             balance = 1 + (form - 5.8) * 0.05 + (attack - 5.8) * 0.04 + (defense - 5.8) * 0.035
             knockout_resilience = 1 + min(0.16, max(-0.14, (defense - 5.7) * 0.035 + (rating - 1600) / 2600))
             attacking_ceiling = 1 + min(0.16, max(-0.12, (attack - 5.8) * 0.045))
+            depth_proxy = 1 + min(0.12, max(-0.10, (min(form, attack, defense) - 5.6) * 0.045 + (rating - 1600) / 4200))
             volatility_penalty = 1 - min(0.12, max(0, abs(attack - defense) - 1.4) * 0.025)
             rng = random.Random(f"{team['id']}-{version}")
             market_odds = MARKET_OUTRIGHT_ODDS.get(team["code"])
@@ -1755,15 +2182,20 @@ def generate_champion_prediction(
                 * max(0.68, balance)
                 * knockout_resilience
                 * attacking_ceiling
+                * depth_proxy
                 * volatility_penalty
                 * rng.uniform(0.96, 1.04)
             )
+            bull_signal = model_signal * (1.08 + max(0, attack - 6.0) * 0.04 + max(0, defense - 6.0) * 0.025)
+            bear_signal = model_signal * max(0.52, 0.82 - max(0, 5.8 - defense) * 0.06 - max(0, abs(attack - defense) - 1.2) * 0.035)
             raw_entries.append(
                 {
                     "team": team["name"],
                     "code": team["code"],
                     "market": market,
                     "modelSignal": model_signal,
+                    "bullSignal": bull_signal,
+                    "bearSignal": bear_signal,
                     "marketOdds": market_odds,
                     "modelFactors": {
                         "rating": rating,
@@ -1772,29 +2204,45 @@ def generate_champion_prediction(
                         "defense": defense,
                         "knockoutResilience": round(knockout_resilience, 3),
                         "attackingCeiling": round(attacking_ceiling, 3),
+                        "depthProxy": round(depth_proxy, 3),
+                        "volatilityPenalty": round(volatility_penalty, 3),
                     },
                 }
             )
         market_total = sum(e["market"] for e in raw_entries) or 1
         model_total = sum(e["modelSignal"] for e in raw_entries) or 1
+        bull_total = sum(e["bullSignal"] for e in raw_entries) or 1
+        bear_total = sum(e["bearSignal"] for e in raw_entries) or 1
         entries = []
         for entry in raw_entries:
             market = round(entry["market"] / market_total * 100, 1)
             model_probability = entry["modelSignal"] / model_total * 100
-            combined = round(model_probability * 0.6 + market * 0.4, 1)
+            bull_probability = entry["bullSignal"] / bull_total * 100
+            bear_probability = entry["bearSignal"] / bear_total * 100
+            combined = round(model_probability * 0.72 + market * 0.28, 1)
+            bull_combined = round(bull_probability * 0.78 + market * 0.22, 1)
+            bear_combined = round(bear_probability * 0.78 + market * 0.22, 1)
+            interval_low = round(max(0.0, min(combined, bull_combined, bear_combined) - (0.15 if combined < 1 else 0.4)), 1)
+            interval_high = round(max(combined, bull_combined, bear_combined) + (0.3 if combined < 1 else 0.8), 1)
             entries.append(
                 {
                     "team": entry["team"],
                     "code": entry["code"],
                     "championProbability": combined,
                     "modelProbability": round(model_probability, 1),
+                    "confidenceInterval": {"low": interval_low, "high": interval_high},
+                    "scenarioProbabilities": {
+                        "base": combined,
+                        "optimistic": bull_combined,
+                        "pessimistic": bear_combined,
+                    },
                     "marketImplied": market,
                     "marketOdds": entry["marketOdds"],
                     "edge": round(combined - market, 1),
                     "tag": "热门" if combined >= 8 else ("追赶者" if combined >= 3.5 else "观察"),
                     "tier": champion_tier(combined),
                     "modelFactors": entry["modelFactors"],
-                    "modelSummary": champion_model_summary(entry["modelFactors"], round(model_probability, 1), combined),
+                    "modelSummary": champion_model_summary(entry["modelFactors"], round(model_probability, 1), combined, {"low": interval_low, "high": interval_high}, {"base": combined, "optimistic": bull_combined, "pessimistic": bear_combined}),
                     "analysis": champion_analysis(entry["team"], combined, market),
                 }
             )
@@ -1842,16 +2290,29 @@ def champion_analysis(team: str, model: float, baseline: float) -> str:
     return f"{team}首先要解决小组出线压力，冠军路径需要连续爆冷。{detail}对他们来说，关键不是大开大合，而是尽量降低失误并抓住少数高质量机会。小组赛阶段需要把比赛切成更细的目标：先稳住防守，再争取定位球、反击和替补球员带来的局部优势。只有在前两场拿到足够积分后，他们才有空间把比赛策略从保守推进转向更主动的淘汰赛冲击。"
 
 
-def champion_model_summary(factors: dict[str, Any], model_probability: float, combined_probability: float) -> list[dict[str, str]]:
+def champion_model_summary(
+    factors: dict[str, Any],
+    model_probability: float,
+    combined_probability: float,
+    confidence_interval: dict[str, float] | None = None,
+    scenarios: dict[str, float] | None = None,
+) -> list[dict[str, str]]:
+    confidence_interval = confidence_interval or {}
+    scenarios = scenarios or {}
     return [
         {"label": "综合概率", "value": f"{combined_probability:.1f}%"},
+        {"label": "95%区间", "value": f"{float(confidence_interval.get('low', max(0, combined_probability - 1.5))):.1f}-{float(confidence_interval.get('high', combined_probability + 1.5)):.1f}%"},
         {"label": "模型概率", "value": f"{model_probability:.1f}%"},
+        {"label": "乐观情景", "value": f"{float(scenarios.get('optimistic', combined_probability)):.1f}%"},
+        {"label": "悲观情景", "value": f"{float(scenarios.get('pessimistic', combined_probability)):.1f}%"},
         {"label": "球队评分", "value": f"{float(factors.get('rating', 0)):.0f}"},
         {"label": "近期状态", "value": f"{float(factors.get('form', 0)):.1f}"},
         {"label": "进攻评分", "value": f"{float(factors.get('attack', 0)):.1f}"},
         {"label": "防守评分", "value": f"{float(factors.get('defense', 0)):.1f}"},
         {"label": "淘汰赛韧性", "value": f"{float(factors.get('knockoutResilience', 1)):.3f}"},
         {"label": "进攻上限", "value": f"{float(factors.get('attackingCeiling', 1)):.3f}"},
+        {"label": "阵容容错", "value": f"{float(factors.get('depthProxy', 1)):.3f}"},
+        {"label": "波动惩罚", "value": f"{float(factors.get('volatilityPenalty', 1)):.3f}"},
     ]
 
 
@@ -1925,17 +2386,101 @@ def grouped_matchdays(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
     ]
 
 
-def nearest_matchday(rows: list[sqlite3.Row]) -> dict[str, Any] | None:
-    groups = grouped_matchdays(rows)
-    if not groups:
-        return None
-    now = datetime.now(CN_TZ)
-    upcoming = [
-        group
-        for group in groups
-        if parse_dt(group["range"]["end"]).astimezone(CN_TZ) >= now
+def grouped_calendar_days(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        item = public_match(row)
+        key = calendar_day_key(row["kickoff"])
+        item["calendarDay"] = key
+        groups.setdefault(key, []).append(item)
+    return [
+        {
+            "matchday": key,
+            "label": calendar_day_label(key),
+            "range": calendar_day_range(key),
+            "items": groups[key],
+        }
+        for key in sorted(groups)
     ]
-    return upcoming[0] if upcoming else groups[-1]
+
+
+def match_is_visible(item: dict[str, Any], now: datetime | None = None) -> bool:
+    status = str(item.get("status") or "").lower()
+    if status in {"finished", "completed", "ended", "fulltime", "ft"}:
+        return False
+    local_now = now.astimezone(CN_TZ) if now else datetime.now(CN_TZ)
+    kickoff = parse_dt(str(item.get("kickoff"))).astimezone(CN_TZ)
+    return kickoff + MATCH_VISIBLE_AFTER_KICKOFF >= local_now
+
+
+def upcoming_day_groups(groups: list[dict[str, Any]], now: datetime | None = None) -> list[dict[str, Any]]:
+    local_now = now.astimezone(CN_TZ) if now else datetime.now(CN_TZ)
+    visible_groups = []
+    for group in groups:
+        items = [item for item in group.get("items", []) if match_is_visible(item, local_now)]
+        if not items:
+            continue
+        visible_groups.append({**group, "items": items})
+    return visible_groups
+
+
+def visible_calendar_days(rows: list[sqlite3.Row], now: datetime | None = None) -> list[dict[str, Any]]:
+    return upcoming_day_groups(grouped_calendar_days(rows), now)
+
+
+def current_prematch_window_start(now: datetime | None = None) -> datetime:
+    local_now = now.astimezone(CN_TZ) if now else datetime.now(CN_TZ)
+    midnight = datetime.combine(local_now.date(), datetime.min.time(), tzinfo=CN_TZ)
+    if local_now.hour < 12:
+        return midnight
+    return midnight + timedelta(hours=12)
+
+
+def prematch_window_group(rows: list[sqlite3.Row], now: datetime | None = None) -> dict[str, Any] | None:
+    start = current_prematch_window_start(now)
+    items = [public_match(row) for row in rows]
+    for offset in range(0, 45):
+        window_start = start + timedelta(days=offset)
+        window_hours = 24 if window_start.hour >= 12 else 12
+        window_end = window_start + timedelta(hours=window_hours) - timedelta(minutes=1)
+        window_items = [
+            item
+            for item in items
+            if window_start <= parse_dt(item["kickoff"]).astimezone(CN_TZ) <= window_end
+            and match_is_visible(item, now or datetime.now(CN_TZ))
+        ]
+        if window_items:
+            return {
+                "matchday": window_start.date().isoformat(),
+                "label": prematch_window_label(window_start, window_end),
+                "range": {"start": window_start.isoformat(), "end": window_end.isoformat()},
+                "items": window_items,
+                "window": "prematch",
+            }
+    return None
+
+
+def tomorrow_calendar_key(now: datetime | None = None) -> str:
+    local_now = now.astimezone(CN_TZ) if now else datetime.now(CN_TZ)
+    return (local_now.date() + timedelta(days=1)).isoformat()
+
+
+def calendar_group_by_key(rows: list[sqlite3.Row], key: str) -> dict[str, Any] | None:
+    return next((group for group in grouped_calendar_days(rows) if group.get("matchday") == key), None)
+
+
+def future_article_calendar_days(rows: list[sqlite3.Row], now: datetime | None = None) -> list[dict[str, Any]]:
+    first_key = tomorrow_calendar_key(now)
+    return [group for group in grouped_calendar_days(rows) if group.get("matchday") >= first_key and group.get("items")]
+
+
+def default_article_matchday(rows: list[sqlite3.Row], now: datetime | None = None) -> dict[str, Any] | None:
+    groups = future_article_calendar_days(rows, now)
+    return groups[0] if groups else None
+
+
+def nearest_matchday(rows: list[sqlite3.Row]) -> dict[str, Any] | None:
+    return prematch_window_group(rows)
 
 
 def nearest_matchday_scope() -> dict[str, Any]:
@@ -2073,7 +2618,8 @@ def admin_page_login(response: Response, payload: dict[str, str] = Body(default_
 @app.get("/api/matches/today")
 def matches_today() -> dict[str, Any]:
     rows = query_public_matches()
-    return {"items": [public_match(row) for row in rows]}
+    items = [public_match(row) for row in rows]
+    return {"items": [item for item in items if match_is_visible(item)]}
 
 
 @app.get("/api/matches/nearest-day")
@@ -2087,14 +2633,7 @@ def matches_nearest_day() -> dict[str, Any]:
 
 @app.get("/api/matches/upcoming")
 def matches_upcoming() -> dict[str, Any]:
-    groups = grouped_matchdays(query_public_matches())
-    now = datetime.now(CN_TZ)
-    upcoming = [
-        group
-        for group in groups
-        if parse_dt(group["range"]["end"]).astimezone(CN_TZ) >= now
-    ]
-    return {"items": upcoming}
+    return {"items": visible_calendar_days(query_public_matches())}
 
 
 @app.get("/api/schedule/groups")
@@ -2104,7 +2643,7 @@ def schedule_groups_api() -> dict[str, Any]:
 
 @app.get("/api/schedule/calendar")
 def schedule_calendar_api() -> dict[str, Any]:
-    return {"items": grouped_matchdays(query_public_matches())}
+    return {"items": visible_calendar_days(query_public_matches())}
 
 
 @app.get("/api/schedule/bracket")
@@ -2158,7 +2697,7 @@ wechat_article.configure(
     now_iso_func=now_iso,
     log_event_func=log_event,
     query_public_matches_func=query_public_matches,
-    grouped_matchdays_func=grouped_matchdays,
+    grouped_matchdays_func=visible_calendar_days,
     match_report_func=match_report,
 )
 
@@ -2200,7 +2739,7 @@ def admin_matches() -> dict[str, Any]:
 
 @app.get("/api/admin/matchdays", dependencies=[Depends(require_admin)])
 def admin_matchdays() -> dict[str, Any]:
-    groups = grouped_matchdays(query_public_matches())
+    groups = future_article_calendar_days(query_public_matches())
     return {
         "items": [
             {
@@ -2316,8 +2855,7 @@ def admin_generate_wechat_daily_preview(payload: dict[str, Any] = Body(default_f
     matchday = str(payload.get("matchday") or "").strip()
     force = bool(payload.get("force", False))
     if not matchday:
-        groups = grouped_matchdays(query_public_matches())
-        group = next((item for item in groups if item.get("items")), None)
+        group = default_article_matchday(query_public_matches())
         if not group:
             raise HTTPException(status_code=404, detail="No matchday available")
         matchday = group["matchday"]

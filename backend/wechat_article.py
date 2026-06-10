@@ -368,8 +368,13 @@ def _format_match_datetime(value: Any) -> str:
 
 
 def _list_text(value: Any) -> str:
+    def clean_item(item: Any) -> str:
+        return str(item or "").strip().rstrip("。；;")
+
     if isinstance(value, list):
-        return "；".join(str(item) for item in value if item)
+        return "；".join(clean_item(item) for item in value if clean_item(item))
+    if isinstance(value, dict):
+        return "；".join(clean_item(item) for item in value.values() if clean_item(item))
     return str(value or "")
 
 
@@ -394,15 +399,27 @@ def _match_logic_text(match: dict[str, Any]) -> str:
 
 def _match_score_text(match: dict[str, Any]) -> str:
     if match.get("reportMissing"):
-        return "报告待更新，比分和进球数参考暂不展开。"
+        return "报告待更新，比分预测暂不展开。"
 
     score = match.get("score_prediction") or {}
     totals = match.get("totals_prediction") or {}
     primary = score.get("primary") or "--"
     alternatives = " / ".join(str(item) for item in score.get("alternatives") or [] if item)
     total_pick = totals.get("displayPick") or totals.get("pick") or "--"
-    suffix = f"，备选 {alternatives}" if alternatives else ""
-    return f"比分参考 {primary}{suffix}；进球数倾向 {total_pick}。"
+    score_analysis = _clip_text(score.get("analysis"), 170)
+    totals_analysis = _clip_text(totals.get("analysis"), 150)
+    parts = [f"首选比分 {primary}"]
+    if alternatives:
+        parts.append(f"备选 {alternatives}")
+    if total_pick and total_pick != "--":
+        parts.append(f"进球数倾向 {total_pick}")
+    headline = "，".join(parts) + "。"
+    detail_parts = []
+    if score_analysis:
+        detail_parts.append(score_analysis)
+    if totals_analysis:
+        detail_parts.append(totals_analysis)
+    return headline + (_clip_text(" ".join(detail_parts), 260) if detail_parts else "")
 
 
 def _match_risk_text(match: dict[str, Any]) -> str:
@@ -419,7 +436,7 @@ def _match_preview_section_markdown(source: dict[str, Any]) -> str:
                 "",
                 f"### {_format_time(match.get('kickoff')).split(' ')[-1]} {match.get('home')} vs {match.get('away')}",
                 f"- 胜负分析：{_match_logic_text(match)}",
-                f"- 比分进球：{_match_score_text(match)}",
+                f"- 比分预测：{_match_score_text(match)}",
                 f"- 冷门风险：{_match_risk_text(match)}",
             ]
         )
@@ -460,7 +477,7 @@ def _stabilize_markdown_with_source(markdown_text: str, source: dict[str, Any]) 
     if first_line:
         title = first_line
 
-    intro = _extract_intro(markdown_text) or "今天的比赛从模型分数、比分进球和冷门风险三个角度来观察。以下内容基于本站已发布的赛前报告整理。"
+    intro = _extract_intro(markdown_text) or "今天的比赛从模型分数、比分预测和冷门风险三个角度来观察。以下内容基于本站已发布的赛前报告整理。"
     observation = _extract_section(markdown_text, "## 赛前观察") or "多场比赛仍需要结合官方首发、伤停信息和临场节奏再做最终判断。模型概率适合帮助梳理观赛重点，不适合被理解为确定性结论。"
     return "\n\n".join(
         [
@@ -477,7 +494,7 @@ def _fallback_markdown(source: dict[str, Any]) -> str:
     lines = [
         f"# {source.get('label') or source.get('matchday')}世界杯前瞻",
         "",
-        "今天的比赛从模型分数、比分进球和冷门风险三个角度来观察。以下内容基于本站已发布的赛前报告整理。",
+        "今天的比赛从模型分数、比分预测和冷门风险三个角度来观察。以下内容基于本站已发布的赛前报告整理。",
         "",
         _match_preview_section_markdown(source),
         "",
@@ -514,8 +531,8 @@ async def _deepseek_daily_preview(source: dict[str, Any]) -> dict[str, str]:
             "如果 reportMissing=true，只能写报告待更新，不得编造分析。",
             "title 必须包含日期和当天至少一场具体比赛或球队，优先突出高关注球队和最高冷门风险比赛，不要围绕“首战、打头阵、比赛日开始”写标题。",
             "title 控制在 26-42 个中文字符左右，可以使用冒号；可使用已知球队修饰词，如德国战车、桑巴军团、高卢雄鸡、斗牛士军团、橙衣军团、三狮军团、蓝武士、太极虎，但不能编造输入外事实或夸大确定性。",
-            "赛事前瞻必须按比赛逐场展开，每场固定包含胜负分析、比分进球、冷门风险三项，不要先罗列赛程再单独写重点场次。",
-            "胜负分析必须优先使用每场的 logic 字段；比分进球只使用 score_prediction 和 totals_prediction；冷门风险只使用 upsetIndex 和 risk_points。",
+            "赛事前瞻必须按比赛逐场展开，每场固定包含胜负分析、比分预测、冷门风险三项，不要先罗列赛程再单独写重点场次。",
+            "胜负分析必须优先使用每场的 logic 字段；比分预测必须使用 score_prediction 和 totals_prediction，并尽量展开其中的 analysis 内容；冷门风险只使用 upsetIndex 和 risk_points。",
             "输出严格 JSON，字段为 title、digest、markdown。",
         ],
     }
@@ -654,7 +671,7 @@ def _render_match_previews(source: dict[str, Any] | None) -> str:
         time_label = html.escape(_format_match_datetime(match.get("kickoff")))
         title = f"{html.escape(str(match.get('home') or '待定'))} vs {html.escape(str(match.get('away') or '待定'))}"
         rows.append(
-            f'<section style="display:block;margin:0 0 14px;padding:0;background:#ffffff;"><section style="margin:0 0 6px;padding:8px 0 3px;"><p style="margin:0 0 1px;white-space:nowrap;color:#111417;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#c08a24;font-size:19px;font-weight:900;">{time_label}</span><span style="color:#111417;font-size:17px;font-weight:900;">&nbsp;&nbsp;{title}</span></p><p style="margin:0 0 0 108px;white-space:nowrap;color:#4d5356;font-size:13px;line-height:1.3;">{html.escape(meta)}</p></section>{_render_preview_item("胜负分析", _match_logic_text(match), "#c08a24")}{_render_preview_item("比分进球", _match_score_text(match), "#c08a24")}{_render_preview_item("冷门风险", _match_risk_text(match), "#c08a24")}</section>'
+            f'<section style="display:block;margin:0 0 14px;padding:0;background:#ffffff;"><section style="margin:0 0 6px;padding:8px 0 3px;"><p style="margin:0 0 1px;white-space:nowrap;color:#111417;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#c08a24;font-size:19px;font-weight:900;">{time_label}</span><span style="color:#111417;font-size:17px;font-weight:900;">&nbsp;&nbsp;{title}</span></p><p style="margin:0 0 0 108px;white-space:nowrap;color:#4d5356;font-size:13px;line-height:1.3;">{html.escape(meta)}</p></section>{_render_preview_item("胜负分析", _match_logic_text(match), "#c08a24")}{_render_preview_item("比分预测", _match_score_text(match), "#c08a24")}{_render_preview_item("冷门风险", _match_risk_text(match), "#c08a24")}</section>'
         )
     return f'<section style="margin:0 0 18px;padding:0 20px 0;color:#111417;">{"".join(rows)}</section>'
 
@@ -668,7 +685,7 @@ def _drop_title_and_schedule(markdown_text: str) -> str:
     output: list[str] = []
     skip = False
     for line in lines:
-        if line.strip() in {"## 今日赛程", "## 赛事前瞻", "## 重点场次", "## 冷门风险", "## 比分与进球数参考"}:
+        if line.strip() in {"## 今日赛程", "## 赛事前瞻", "## 重点场次", "## 冷门风险", "## 比分预测", "## 比分与进球数参考"}:
             skip = True
             continue
         if skip and line.startswith("## "):

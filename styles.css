@@ -862,6 +862,9 @@ h1 {
 }
 
 .model-logic-head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
   font-size: 22px;
 }
@@ -883,6 +886,52 @@ h1 {
   background: rgba(238, 197, 123, 0.08);
   font-size: 12px;
   font-weight: 900;
+}
+
+.method-help {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(238, 197, 123, 0.42);
+  border-radius: 999px;
+  color: var(--gold);
+  background: rgba(238, 197, 123, 0.1);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: help;
+}
+
+.method-help::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  top: calc(100% + 10px);
+  width: min(360px, 76vw);
+  transform: translateX(-50%) translateY(-4px);
+  border: 1px solid rgba(238, 197, 123, 0.28);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: rgba(21, 28, 31, 0.98);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.65;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.method-help:hover::after,
+.method-help:focus-visible::after,
+.method-help:focus::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .model-logic-text {

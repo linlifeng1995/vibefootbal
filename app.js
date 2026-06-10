@@ -28,15 +28,18 @@ function pct(value) {
   return `${Number(value).toFixed(1)}%`;
 }
 
-function formatTime(value) {
+function formatTime(value, mode = "datetime") {
   if (!value) return "时间待定";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
+  const options =
+    mode === "clock"
+      ? { hour: "2-digit", minute: "2-digit" }
+      : { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" };
   return date.toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+    ...options,
+    hour12: false,
+    timeZone: "Asia/Shanghai",
   });
 }
 
@@ -571,25 +574,90 @@ function signedValue(value) {
 }
 
 function factorValue(factor = {}) {
+  const name = String(factor.name || "");
+  if (name.includes("进球") || name.includes("比分") || name.includes("Poisson")) {
+    const left = factor.homeImpact === null || factor.homeImpact === undefined ? "--" : Number(factor.homeImpact).toFixed(1);
+    const right = factor.awayImpact === null || factor.awayImpact === undefined ? "--" : Number(factor.awayImpact).toFixed(1);
+    return `${left} / ${right}`;
+  }
   return `${signedValue(factor.homeImpact)} / ${signedValue(factor.awayImpact)}`;
 }
 
+function attrText(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function cleanLogicText(text) {
+  const banned = [
+    "Elo",
+    "Poisson",
+    "Dixon",
+    "模型",
+    "校准",
+    "稳定器",
+    "外部信号",
+    "基础分数",
+    "基础评分差",
+    "归一化",
+    "分数分布",
+    "确定性结论",
+    "隐含概率",
+    "多模型",
+    "置信度",
+  ];
+  return String(text || "")
+    .replaceAll("；", "。")
+    .split("。")
+    .map((part) => part.trim())
+    .filter((part) => part && !banned.some((term) => part.includes(term)))
+    .join("。")
+    .trim();
+}
+
+function calculationMethodNote(content = {}, report = {}) {
+  const fallback = "计算采用分层集成：Elo/基础评分处理长期强度，近期状态处理短期动量，攻防匹配比较进攻和防守稳定性，Poisson/Dixon-Coles比分层校验进球分布，外部校准信号只作为概率稳定器，最后用多模型分歧和足球随机性调整置信度。概率适合理解为赛前分布，不是确定性结论。";
+  return content.calculation_method_note || report.prediction?.methodology?.deepseek_rule || fallback;
+}
+
+function publicFactor(factor = {}) {
+  const rawName = String(factor.name || "");
+  if (rawName.includes("综合校准") || rawName.includes("不确定性")) return null;
+  const name = rawName
+    .replace("Elo基础评分", "基础评分")
+    .replace("Poisson比分层", "进球走势")
+    .replace("比分层", "进球走势");
+  const defaultDetails = {
+    基础评分: "整体强度与赛地因素的综合对比。",
+    近期状态: "近期表现和进入比赛状态的对比。",
+    攻防匹配: "推进质量与防守承压能力的对比。",
+    进球走势: "结合攻防效率后的比分区间参考。",
+  };
+  const rawDetail = String(factor.detail || "");
+  const detail = cleanLogicText(rawDetail) || defaultDetails[name] || "";
+  return { ...factor, name, detail };
+}
+
 function renderModelLogic(content = {}, report = {}) {
-  const factors = (report.factors || []).filter((factor) => factor.name !== "综合校准");
+  const factors = (report.factors || []).map(publicFactor).filter(Boolean);
+  const logicText = cleanLogicText(content.logic) || "胜负逻辑待模型生成。";
+  const methodNote = attrText(calculationMethodNote(content, report));
   return `
     <section class="model-logic-panel">
       <div class="heat-line"></div>
       <div class="model-logic-head">
         <div>
-          <h3>胜负逻辑</h3>
-          <p>根据基础评分、状态、攻防匹配和赛地修正，计算赛前分数差和胜平负分布。</p>
+          <h3>胜负逻辑 <button class="method-help" type="button" aria-label="查看模型计算说明" data-tooltip="${methodNote}" title="${methodNote}">?</button></h3>
         </div>
-        <span>模型分数计算</span>
+        <span>赛前判断</span>
       </div>
-      <p class="model-logic-text">${content.logic || "胜负逻辑待模型生成。"}</p>
+      <p class="model-logic-text">${logicText}</p>
       ${
         factors.length
-          ? `<div class="model-factor-grid">
+          ? `<div class="model-factor-grid" aria-label="评分比较">
               ${factors
                 .map(
                   (factor) => `
@@ -803,10 +871,9 @@ function renderScheduleView() {
             <h3>${day.label}</h3>
             <span>${day.items.length} 场</span>
           </div>
-          <p>${formatRange(day.range)}</p>
           ${day.items.map((match) => `
             <div class="calendar-match">
-              <span class="time-badge">${formatTime(match.kickoff)}</span>
+              <span class="time-badge">${formatTime(match.kickoff, "clock")}</span>
               <strong>${renderFlag(match.homeCode)}${match.home}<em>VS</em>${match.away}${renderFlag(match.awayCode)}</strong>
               <small>${match.group} · ${match.venue}</small>
             </div>
