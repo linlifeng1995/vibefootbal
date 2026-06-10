@@ -187,6 +187,16 @@ def _focus_teams(matches: list[dict[str, Any]]) -> list[str]:
     return [team for team in priority if team in teams]
 
 
+def _focus_match(matches: list[dict[str, Any]], excluded: set[str]) -> dict[str, Any] | None:
+    for team in _focus_teams(matches):
+        if team in excluded:
+            continue
+        for match in matches:
+            if team in {str(match.get("home") or "").strip(), str(match.get("away") or "").strip()}:
+                return match
+    return None
+
+
 def _highest_risk_match(matches: list[dict[str, Any]]) -> dict[str, Any] | None:
     if not matches:
         return None
@@ -215,7 +225,22 @@ def _is_generic_article_title(title: str, source: dict[str, Any]) -> bool:
         for key in ("home", "away")
     }
     teams.discard("")
-    return not any(team in title for team in teams)
+    if not any(team in title for team in teams):
+        return True
+
+    risk = _highest_risk_match(_sorted_source_matches(source))
+    if risk:
+        try:
+            risk_value = float(risk.get("upsetIndex") or 0)
+        except (TypeError, ValueError):
+            risk_value = 0.0
+        risk_teams = {str(risk.get(key) or "").strip() for key in ("home", "away")}
+        risk_teams.discard("")
+        suspense_terms = ("最悬", "悬念", "冷门", "爆冷", "变数", "能否", "看点")
+        if risk_value >= 60 and not any(team in title for team in risk_teams) and not any(term in title for term in suspense_terms):
+            return True
+
+    return False
 
 
 def _build_article_title(source: dict[str, Any], raw_title: Any = "") -> str:
@@ -231,14 +256,35 @@ def _build_article_title(source: dict[str, Any], raw_title: Any = "") -> str:
     first = matches[0]
     first_pair = _match_pair(first)
     first_home = str(first.get("home") or "").strip()
-    first_teams = {str(first.get(key) or "").strip() for key in ("home", "away")}
-    focus = [team for team in _focus_teams(matches) if team and team not in first_teams]
-    if focus:
-        return f"{date_label}世界杯前瞻：{first_home or first_pair}打头阵，{'、'.join(focus[:2])}同日亮相"[:64]
-
+    used_teams = {str(first.get(key) or "").strip() for key in ("home", "away")}
     risk = _highest_risk_match(matches)
+    focus_match = _focus_match(matches, used_teams)
+    if focus_match:
+        used_teams.update(str(focus_match.get(key) or "").strip() for key in ("home", "away"))
+
+    first_hook = f"{first_home or first_pair}打响首战"
+    focus_hook = ""
+    if focus_match:
+        focus_team = next((team for team in _focus_teams([focus_match]) if team), str(focus_match.get("home") or "").strip())
+        focus_hook = f"{focus_team}登场"
+
+    risk_hook = ""
     if risk and risk is not first:
-        return f"{date_label}世界杯前瞻：{first_pair}打头阵，{_match_pair(risk)}藏变数"[:64]
+        risk_teams = {str(risk.get(key) or "").strip() for key in ("home", "away")}
+        if not risk_teams.issubset(used_teams):
+            risk_hook = f"{_match_pair(risk)}最悬"
+
+    hooks = [first_hook]
+    if focus_hook:
+        hooks.append(focus_hook)
+    if risk_hook:
+        hooks.append(risk_hook)
+    if len(hooks) >= 3:
+        return f"{date_label}世界杯前瞻：{hooks[0]}，{hooks[1]}，{hooks[2]}"[:64]
+    if len(hooks) == 2:
+        return f"{date_label}世界杯前瞻：{hooks[0]}，{hooks[1]}，冷门线索别错过"[:64]
+    if risk and risk is not first:
+        return f"{date_label}世界杯前瞻：{first_pair}打响首战，{_match_pair(risk)}最悬"[:64]
 
     return f"{date_label}世界杯前瞻：{first_pair}领衔，今日{len(matches)}场逐场拆解"[:64]
 
@@ -433,8 +479,8 @@ async def _deepseek_daily_preview(source: dict[str, Any]) -> dict[str, str]:
         "rules": [
             "只使用 source 中出现的事实，不新增球员、伤停、赔率、历史战绩。",
             "如果 reportMissing=true，只能写报告待更新，不得编造分析。",
-            "title 必须包含日期和当天至少一场具体比赛或球队，突出今日最值得看的赛程线索；不要输出“6月11日赛事世界杯前瞻”这类泛标题。",
-            "title 控制在 24-36 个中文字符左右，可以使用冒号，语气要像公众号标题但不能夸大确定性。",
+            "title 必须包含日期和当天至少一场具体比赛或球队，优先突出首场比赛、高关注球队和最高冷门风险比赛；不要输出“6月11日赛事世界杯前瞻”这类泛标题。",
+            "title 控制在 26-42 个中文字符左右，可以使用冒号；允许使用“打响首战、登场、最悬、看点、变数”等公众号化表达，但不能夸大确定性。",
             "赛事前瞻必须按比赛逐场展开，每场固定包含胜负分析、比分进球、冷门风险三项，不要先罗列赛程再单独写重点场次。",
             "胜负分析必须优先使用每场的 logic 字段；比分进球只使用 score_prediction 和 totals_prediction；冷门风险只使用 upsetIndex 和 risk_points。",
             "输出严格 JSON，字段为 title、digest、markdown。",
