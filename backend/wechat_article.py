@@ -25,6 +25,23 @@ DISCLAIMER = "本文为赛前数据分析与观赛参考，不构成任何投注
 FORBIDDEN_TERMS = ("稳赚", "必红", "投注建议", "下注", "赔率套利", "收益", "推荐买入")
 DEFAULT_HERO_IMAGE_PREVIEW_URL = "/static/assets/wechat-article-hero-card.png"
 DEFAULT_HERO_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "wechat-article-hero-card.png"
+TEAM_HEADLINE_NAMES = {
+    "巴西": "桑巴军团",
+    "德国": "德国战车",
+    "法国": "高卢雄鸡",
+    "西班牙": "斗牛士军团",
+    "荷兰": "橙衣军团",
+    "英格兰": "三狮军团",
+    "葡萄牙": "五盾军团",
+    "阿根廷": "潘帕斯雄鹰",
+    "比利时": "欧洲红魔",
+    "乌拉圭": "南美劲旅",
+    "克罗地亚": "格子军团",
+    "墨西哥": "东道主墨西哥",
+    "瑞士": "瑞士军刀",
+    "日本": "蓝武士",
+    "韩国": "太极虎",
+}
 
 _env: Callable[[str, str], str] | None = None
 _db: Callable[[], Any] | None = None
@@ -157,6 +174,10 @@ def _match_pair(match: dict[str, Any]) -> str:
     return f"{home}vs{away}"
 
 
+def _headline_team_name(team: str) -> str:
+    return TEAM_HEADLINE_NAMES.get(team, team)
+
+
 def _sorted_source_matches(source: dict[str, Any]) -> list[dict[str, Any]]:
     matches = [item for item in (source.get("matches") or []) if isinstance(item, dict)]
     return sorted(matches, key=lambda item: str(item.get("kickoff") or ""))
@@ -187,14 +208,25 @@ def _focus_teams(matches: list[dict[str, Any]]) -> list[str]:
     return [team for team in priority if team in teams]
 
 
-def _focus_match(matches: list[dict[str, Any]], excluded: set[str]) -> dict[str, Any] | None:
-    for team in _focus_teams(matches):
-        if team in excluded:
-            continue
-        for match in matches:
-            if team in {str(match.get("home") or "").strip(), str(match.get("away") or "").strip()}:
-                return match
+def _match_for_team(matches: list[dict[str, Any]], team: str) -> dict[str, Any] | None:
+    for match in matches:
+        if team in {str(match.get("home") or "").strip(), str(match.get("away") or "").strip()}:
+            return match
     return None
+
+
+def _opponent_name(match: dict[str, Any], team: str) -> str:
+    home = str(match.get("home") or "").strip()
+    away = str(match.get("away") or "").strip()
+    return away if home == team else home
+
+
+def _focus_hook(match: dict[str, Any], team: str, index: int) -> str:
+    opponent = _opponent_name(match, team)
+    if opponent and opponent in TEAM_HEADLINE_NAMES:
+        return f"{_headline_team_name(team)}碰{_headline_team_name(opponent)}"
+    action = ("登场", "亮相", "出击")[index % 3]
+    return f"{_headline_team_name(team)}{action}"
 
 
 def _highest_risk_match(matches: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -227,6 +259,8 @@ def _is_generic_article_title(title: str, source: dict[str, Any]) -> bool:
     teams.discard("")
     if not any(team in title for team in teams):
         return True
+    if any(term in title for term in ("首战", "打头阵", "打响")):
+        return True
 
     risk = _highest_risk_match(_sorted_source_matches(source))
     if risk:
@@ -253,40 +287,39 @@ def _build_article_title(source: dict[str, Any], raw_title: Any = "") -> str:
     if not matches:
         return f"{date_label}世界杯前瞻：赛程与观赛重点速览"[:64]
 
-    first = matches[0]
-    first_pair = _match_pair(first)
-    first_home = str(first.get("home") or "").strip()
-    used_teams = {str(first.get(key) or "").strip() for key in ("home", "away")}
     risk = _highest_risk_match(matches)
-    focus_match = _focus_match(matches, used_teams)
-    if focus_match:
-        used_teams.update(str(focus_match.get(key) or "").strip() for key in ("home", "away"))
+    hooks: list[str] = []
+    used_matches: set[int] = set()
 
-    first_hook = f"{first_home or first_pair}打响首战"
-    focus_hook = ""
-    if focus_match:
-        focus_team = next((team for team in _focus_teams([focus_match]) if team), str(focus_match.get("home") or "").strip())
-        focus_hook = f"{focus_team}登场"
+    for team in _focus_teams(matches):
+        match = _match_for_team(matches, team)
+        if not match or match is risk or id(match) in used_matches:
+            continue
+        hooks.append(_focus_hook(match, team, len(hooks)))
+        used_matches.add(id(match))
+        if len(hooks) >= 2:
+            break
 
     risk_hook = ""
-    if risk and risk is not first:
-        risk_teams = {str(risk.get(key) or "").strip() for key in ("home", "away")}
-        if not risk_teams.issubset(used_teams):
+    if risk:
+        focus_risk_team = next((team for team in _focus_teams([risk]) if team), "")
+        if focus_risk_team:
+            opponent = _opponent_name(risk, focus_risk_team)
+            risk_hook = f"{_headline_team_name(focus_risk_team)}碰{opponent}最悬" if opponent else f"{_headline_team_name(focus_risk_team)}最悬"
+        else:
             risk_hook = f"{_match_pair(risk)}最悬"
 
-    hooks = [first_hook]
-    if focus_hook:
-        hooks.append(focus_hook)
     if risk_hook:
         hooks.append(risk_hook)
+
     if len(hooks) >= 3:
         return f"{date_label}世界杯前瞻：{hooks[0]}，{hooks[1]}，{hooks[2]}"[:64]
     if len(hooks) == 2:
-        return f"{date_label}世界杯前瞻：{hooks[0]}，{hooks[1]}，冷门线索别错过"[:64]
-    if risk and risk is not first:
-        return f"{date_label}世界杯前瞻：{first_pair}打响首战，{_match_pair(risk)}最悬"[:64]
+        return f"{date_label}世界杯前瞻：{hooks[0]}，{hooks[1]}，悬念拉满"[:64]
+    if len(hooks) == 1:
+        return f"{date_label}世界杯前瞻：{hooks[0]}，今日{len(matches)}场看点拆解"[:64]
 
-    return f"{date_label}世界杯前瞻：{first_pair}领衔，今日{len(matches)}场逐场拆解"[:64]
+    return f"{date_label}世界杯前瞻：{_match_pair(matches[0])}领衔，今日{len(matches)}场看点拆解"[:64]
 
 
 def _normalize_article_payload(raw: Any, source: dict[str, Any]) -> dict[str, str]:
@@ -479,8 +512,8 @@ async def _deepseek_daily_preview(source: dict[str, Any]) -> dict[str, str]:
         "rules": [
             "只使用 source 中出现的事实，不新增球员、伤停、赔率、历史战绩。",
             "如果 reportMissing=true，只能写报告待更新，不得编造分析。",
-            "title 必须包含日期和当天至少一场具体比赛或球队，优先突出首场比赛、高关注球队和最高冷门风险比赛；不要输出“6月11日赛事世界杯前瞻”这类泛标题。",
-            "title 控制在 26-42 个中文字符左右，可以使用冒号；允许使用“打响首战、登场、最悬、看点、变数”等公众号化表达，但不能夸大确定性。",
+            "title 必须包含日期和当天至少一场具体比赛或球队，优先突出高关注球队和最高冷门风险比赛，不要围绕“首战、打头阵、比赛日开始”写标题。",
+            "title 控制在 26-42 个中文字符左右，可以使用冒号；可使用已知球队修饰词，如德国战车、桑巴军团、高卢雄鸡、斗牛士军团、橙衣军团、三狮军团、蓝武士、太极虎，但不能编造输入外事实或夸大确定性。",
             "赛事前瞻必须按比赛逐场展开，每场固定包含胜负分析、比分进球、冷门风险三项，不要先罗列赛程再单独写重点场次。",
             "胜负分析必须优先使用每场的 logic 字段；比分进球只使用 score_prediction 和 totals_prediction；冷门风险只使用 upsetIndex 和 risk_points。",
             "输出严格 JSON，字段为 title、digest、markdown。",
