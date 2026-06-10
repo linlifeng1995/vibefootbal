@@ -69,6 +69,17 @@ DEEPSEEK_THINKING=enabled
 DEEPSEEK_REASONING_EFFORT=high
 ADMIN_TOKEN=change-me
 ADMIN_PAGE_PASSWORD=change-me
+WECHAT_APP_ID=
+WECHAT_APP_SECRET=
+WECHAT_AUTHOR=世界杯观赛助手
+WECHAT_DEFAULT_COVER_MEDIA_ID=
+WECHAT_ARTICLE_SOURCE_URL=http://140.143.182.236/worldcup/
+WECHAT_ARTICLE_HERO_IMAGE_PATH=assets/wechat-article-hero-card.png
+WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL=/static/assets/wechat-article-hero-card.png
+WECHAT_DAILY_PREVIEW_AUTO_DRAFT=false
+WECHAT_DAILY_PREVIEW_HOUR=18
+DEEPSEEK_WECHAT_REASONING_EFFORT=medium
+DEEPSEEK_WECHAT_THINKING=enabled
 ```
 
 当前线上已知状态：
@@ -322,7 +333,10 @@ cd /opt/worldcup-assistant
 - `WECHAT_AUTHOR`
 - `WECHAT_DEFAULT_COVER_MEDIA_ID`
 - `WECHAT_ARTICLE_SOURCE_URL`
+- `WECHAT_ARTICLE_HERO_IMAGE_PATH`
+- `WECHAT_ARTICLE_HERO_IMAGE_PREVIEW_URL`
 - `WECHAT_DAILY_PREVIEW_AUTO_DRAFT`
+- `WECHAT_DAILY_PREVIEW_HOUR`
 - `DEEPSEEK_WECHAT_REASONING_EFFORT`
 - `DEEPSEEK_WECHAT_THINKING`
 
@@ -333,3 +347,8 @@ V1 约束：
 - fact check 失败时状态为 `fact_failed`，禁止推送草稿箱。
 - 默认只生成文章；只有 `WECHAT_DAILY_PREVIEW_AUTO_DRAFT=true` 时定时任务才会自动推送草稿箱。
 - 草稿封面使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，第一版不动态生成封面。
+- 正文标题图使用仓库内固定 PNG：`assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`；推草稿时自动调用微信 `media/uploadimg` 上传并替换正文 URL。标题图不需要手动上传素材库，封面才需要 `WECHAT_DEFAULT_COVER_MEDIA_ID`。
+- 微信正文样式采用 A17/A15 方向：白底、PNG 透明圆角标题图、金色日期时间、金色小标题、无分割线、无 table、无整篇深色背景。
+- 公众号标题由 DeepSeek 先生成，再由后端做质量判断；如果标题太泛、缺少当天球队、缺少最高冷门风险，或使用“首战 / 打头阵 / 打响”等比赛日开始叙事，会被本地标题生成器覆盖。
+- 标题策略只保留热点热度：高关注球队 + 最高冷门风险场 + 球队修饰词。可用修饰词包括 `桑巴军团`、`德国战车`、`高卢雄鸡`、`斗牛士军团`、`橙衣军团`、`三狮军团`、`五盾军团`、`潘帕斯雄鹰`、`欧洲红魔`、`格子军团`、`瑞士军刀`、`蓝武士`、`太极虎`、`东道主墨西哥`。
+- 标题示例：`6月12日世界杯前瞻：德国战车登场，橙衣军团碰蓝武士，科特迪瓦vs厄瓜多尔最悬`。
