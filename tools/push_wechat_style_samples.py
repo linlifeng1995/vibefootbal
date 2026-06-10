@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 HERO_IMAGE = ROOT / "assets" / "wechat-style-test-hero-baked.jpg"
+HERO_CARD_IMAGE = ROOT / "assets" / "wechat-style-test-hero-card.jpg"
+HERO_CARD_PNG = ROOT / "assets" / "wechat-style-test-hero-card.png"
 SOURCE_URL = "http://140.143.182.236/worldcup/"
 
 
@@ -31,11 +33,12 @@ def access_token() -> str:
 
 
 def upload_content_image(token: str, image_path: Path) -> str:
+    mime_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
     with image_path.open("rb") as image_file:
         response = httpx.post(
             "https://api.weixin.qq.com/cgi-bin/media/uploadimg",
             params={"access_token": token},
-            files={"media": (image_path.name, image_file, "image/jpeg")},
+            files={"media": (image_path.name, image_file, mime_type)},
             timeout=30,
         )
     response.raise_for_status()
@@ -45,26 +48,20 @@ def upload_content_image(token: str, image_path: Path) -> str:
     return str(data["url"])
 
 
-def block(title: str, body: str, *, color: str = "#f6c35b", border: bool = True, compact: bool = False) -> str:
+def block(title: str, body: str, *, color: str = "#f6c35b", border: bool = True, compact: bool = False, dark_safe: bool = False) -> str:
     border_style = f"border:1px solid rgba(246,195,91,0.22);" if border else "border-left:3px solid rgba(246,195,91,0.72);"
-    pad = "9px 11px 10px" if compact else "17px 16px 18px"
-    margin = "8px 0 0" if compact else "12px 0 0"
+    pad = "8px 10px 9px" if compact else "17px 16px 18px"
+    margin = "7px 0 0" if compact else "12px 0 0"
     radius = "border-radius:10px;" if border else "border-radius:0;"
-    return f"""
-    <section style="margin:{margin};padding:{pad};{border_style}{radius}background:rgba(255,255,255,0.052);">
-      <p style="margin:0 0 5px;color:{color};font-size:14px;line-height:1.35;font-weight:900;">{title}</p>
-      <p style="margin:0;color:#d7dfdc;font-size:14px;line-height:1.72;">{body}</p>
-    </section>
-    """
+    background = "#222628" if dark_safe else "rgba(255,255,255,0.052)"
+    text_color = "#dce3e0" if dark_safe else "#d7dfdc"
+    return f'<section style="margin:{margin};padding:{pad};{border_style}{radius}background:{background};"><p style="margin:0 0 2px;color:{color};font-size:14px;line-height:1.18;font-weight:900;">{title}</p><p style="margin:0;color:{text_color};font-size:14px;line-height:1.58;">{body}</p></section>'
 
 
-def match_header_a() -> str:
-    return """
-    <section style="margin:0 0 9px;padding:0 0 7px;">
-      <p style="margin:0 0 2px;white-space:nowrap;color:#ffffff;font-size:17px;line-height:1.35;font-weight:900;"><span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span><span style="color:#ffffff;font-size:17px;font-weight:900;">&nbsp;&nbsp;墨西哥 vs 南非</span></p>
-      <p style="margin:0;white-space:nowrap;color:#c9d2cf;font-size:13px;line-height:1.5;font-weight:700;">A 组 · 墨西哥城</p>
-    </section>
-    """
+def match_header_a(*, dark_safe: bool = False) -> str:
+    line_color = "rgba(255,255,255,0.18)" if dark_safe else "rgba(255,255,255,0.16)"
+    meta_color = "#cfd7d4" if dark_safe else "#c9d2cf"
+    return f'<section style="margin:0 0 6px;padding:8px 0 3px;border-top:1px solid {line_color};"><p style="margin:0 0 1px;white-space:nowrap;color:#ffffff;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span><span style="color:#ffffff;font-size:17px;font-weight:900;">&nbsp;&nbsp;墨西哥 vs 南非</span></p><p style="margin:0 0 0 75px;white-space:nowrap;color:{meta_color};font-size:13px;line-height:1.25;font-weight:700;">A 组 · 墨西哥城</p></section>'
 
 
 def match_header_b() -> str:
@@ -90,31 +87,27 @@ SCORE = "比分参考 1-0，备选 2-0 / 1-1 / 2-1；进球数倾向偏少。"
 RISK = "爆冷指数 49.3%。若墨西哥迟迟无法破门，南非的转换速度和定位球会让比赛进入更胶着的后半段。"
 
 
-def shell(hero_url: str, body: str) -> str:
-    return f"""
-    <section style="max-width:677px;margin:0 auto;padding:0;background:#0f1416;color:#ffffff;">
-      <img src="{hero_url}" alt="Vibe Football 比赛日重点观察" style="display:block;width:100%;height:auto;margin:0;border:0;" />
-      <section style="padding:14px 20px 28px;background:#0f1416;">
-        <section style="margin:0 0 16px;border-top:1px solid rgba(255,255,255,0.16);height:0;line-height:0;font-size:0;"></section>
-        {body}
-        <section style="margin:20px 0 0;padding:12px 13px;background:rgba(246,195,91,0.10);border:1px solid rgba(246,195,91,0.24);border-radius:8px;">
-          <p style="margin:0;color:#f6c35b;font-size:13px;line-height:1.75;">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</p>
-        </section>
-      </section>
-    </section>
-    """
+def shell(hero_url: str, body: str, *, dark_safe: bool = False) -> str:
+    background = "#1b1f21" if dark_safe else "#0f1416"
+    disclaimer_background = "#25241f" if dark_safe else "rgba(246,195,91,0.10)"
+    return f'<section style="max-width:677px;margin:0 auto;padding:0;background:{background};color:#ffffff;"><img src="{hero_url}" alt="Vibe Football 比赛日重点观察" style="display:block;width:100%;height:auto;margin:0;border:0;" /><section style="padding:0 20px 24px;background:{background};">{body}<section style="margin:12px 0 0;padding:9px 11px;background:{disclaimer_background};border:1px solid rgba(246,195,91,0.24);border-radius:8px;"><p style="margin:0;color:#f6c35b;font-size:13px;line-height:1.65;">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</p></section></section></section>'
 
 
-def sample_a(hero_url: str) -> str:
-    body = f"""
-    <section style="margin:0 0 18px;padding:0;background:#0f1416;">
-      {match_header_a()}
-      {block("胜负分析", ANALYSIS, compact=True)}
-      {block("比分进球", SCORE, color="#fbbf24", compact=True)}
-      {block("冷门风险", RISK, color="#7dd3c7", compact=True)}
-    </section>
-    """
-    return shell(hero_url, body)
+def sample_a(hero_url: str, *, dark_safe: bool = False) -> str:
+    background = "#1b1f21" if dark_safe else "#0f1416"
+    body = f'<section style="margin:0 0 14px;padding:0;background:{background};">{match_header_a(dark_safe=dark_safe)}{block("胜负分析", ANALYSIS, compact=True, dark_safe=dark_safe)}{block("比分进球", SCORE, color="#fbbf24", compact=True, dark_safe=dark_safe)}{block("冷门风险", RISK, color="#7dd3c7", compact=True, dark_safe=dark_safe)}</section>'
+    return shell(hero_url, body, dark_safe=dark_safe)
+
+
+def light_block(title: str, body: str, *, color: str = "#c08a24") -> str:
+    return f'<section style="margin:9px 0 0;padding:10px 11px;border:1px solid #d8c99a;border-radius:10px;"><p style="margin:0 0 3px;color:{color};font-size:14px;line-height:1.2;font-weight:900;">{title}</p><p style="margin:0;color:#303437;font-size:14px;line-height:1.58;">{body}</p></section>'
+
+
+def sample_a10(hero_url: str, *, pull_match: bool = False) -> str:
+    match_margin = "-116px 0 8px" if pull_match else "0 0 8px"
+    match = f'<section style="margin:{match_margin};padding:0 20px 2px;"><p style="margin:0 0 1px;white-space:nowrap;color:#111417;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#c08a24;font-size:19px;font-weight:900;">03:00</span><span style="color:#111417;font-size:17px;font-weight:900;">&nbsp;&nbsp;墨西哥 vs 南非</span></p><p style="margin:0 0 0 70px;white-space:nowrap;color:#4d5356;font-size:13px;line-height:1.3;">A 组 · 墨西哥城</p></section>'
+    body = f'{light_block("胜负分析", ANALYSIS)}{light_block("比分进球", SCORE)}{light_block("冷门风险", RISK)}'
+    return f'<section style="max-width:677px;margin:0 auto;padding:0;color:#111417;"><img src="{hero_url}" alt="Vibe Football 比赛日重点观察" style="display:block;width:100%;height:auto;margin:0;border:0;" />{match}<section style="padding:0 20px 22px;">{body}<section style="margin:12px 0 0;padding:9px 11px;border:1px solid #eadcae;border-radius:8px;"><p style="margin:0;color:#6d5b21;font-size:13px;line-height:1.65;">本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。</p></section></section></section>'
 
 
 def sample_b(hero_url: str) -> str:
@@ -178,11 +171,20 @@ def push_draft(token: str, title: str, content: str) -> str:
 def main() -> None:
     load_dotenv(ROOT / ".env")
     token = access_token()
-    hero_url = upload_content_image(token, HERO_IMAGE)
     variant = sys.argv[1].strip().lower() if len(sys.argv) > 1 else "all"
-    if variant in {"a", "a2", "a3"}:
-        title = "样式测试A3｜线条对齐" if variant == "a3" else "样式测试A2｜目标微调"
-        samples = [(title, sample_a(hero_url))]
+    if variant in {"a15", "a16", "a17"}:
+        hero_path = HERO_CARD_PNG
+    elif variant in {"a10", "a11", "a12", "a13", "a14"}:
+        hero_path = HERO_CARD_IMAGE
+    else:
+        hero_path = HERO_IMAGE
+    hero_url = upload_content_image(token, hero_path)
+    if variant in {"a10", "a11", "a12", "a13", "a14", "a15", "a16", "a17"}:
+        title = "样式测试A17｜金色时间大标题图" if variant == "a17" else ("样式测试A16｜金色小标题" if variant == "a16" else ("样式测试A15｜PNG透明圆角" if variant == "a15" else ("样式测试A14｜纯圆角标题图" if variant == "a14" else ("样式测试A13｜A10圆角时间外置" if variant == "a13" else ("样式测试A12｜图片自带圆角" if variant == "a12" else ("样式测试A11｜标题图不包时间" if variant == "a11" else "样式测试A10｜白底圆角标题图"))))))
+        samples = [(title, sample_a10(hero_url, pull_match=variant == "a13"))]
+    elif variant in {"a", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"}:
+        title = "样式测试A9｜深色适配" if variant == "a9" else ("样式测试A8｜时间顶部微调" if variant == "a8" else ("样式测试A7｜压缩HTML空白" if variant == "a7" else ("样式测试A6｜合并分割线" if variant == "a6" else ("样式测试A5｜删除空行" if variant == "a5" else ("样式测试A4｜间距收紧" if variant == "a4" else ("样式测试A3｜线条对齐" if variant == "a3" else "样式测试A2｜目标微调"))))))
+        samples = [(title, sample_a(hero_url, dark_safe=variant == "a9"))]
     else:
         samples = [
             ("样式测试A｜无表格卡片", sample_a(hero_url)),

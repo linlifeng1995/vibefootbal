@@ -23,8 +23,8 @@ except ImportError:  # pragma: no cover - dependency is declared, fallback keeps
 
 DISCLAIMER = "本文为赛前数据分析与观赛参考，不构成任何投注、投资或收益建议。"
 FORBIDDEN_TERMS = ("稳赚", "必红", "投注建议", "下注", "赔率套利", "收益", "推荐买入")
-DEFAULT_HERO_IMAGE_PREVIEW_URL = "/static/assets/wechat-cover-worldcup-preview.jpg"
-DEFAULT_HERO_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "wechat-cover-worldcup-preview.jpg"
+DEFAULT_HERO_IMAGE_PREVIEW_URL = "/static/assets/wechat-article-hero-card.png"
+DEFAULT_HERO_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "wechat-article-hero-card.png"
 
 _env: Callable[[str, str], str] | None = None
 _db: Callable[[], Any] | None = None
@@ -170,6 +170,16 @@ def _format_time(value: Any) -> str:
     try:
         dt = datetime.fromisoformat(str(value))
         return dt.strftime("%m-%d %H:%M")
+    except ValueError:
+        return str(value)
+
+
+def _format_match_datetime(value: Any) -> str:
+    if not value:
+        return "时间待定"
+    try:
+        dt = datetime.fromisoformat(str(value))
+        return f"{dt.month}月{dt.day}日 {dt:%H:%M}"
     except ValueError:
         return str(value)
 
@@ -439,31 +449,12 @@ def _hero_image_path() -> Path:
 
 
 def _render_html_poster(source: dict[str, Any] | None) -> str:
-    meta = _poster_meta(source)
     hero_url = html.escape(_hero_image_preview_url(), quote=True)
-    return f"""
-    <section style="margin:0 0 22px;overflow:hidden;background:#0f1416;color:#ffffff;">
-      <section style="margin:0 0 0;padding:0;background:#0f1416;">
-        <img src="{hero_url}" alt="Vibe Football 比赛日前瞻" style="display:block;width:100%;max-width:100%;height:auto;margin:0;border:0;" />
-      </section>
-      <section style="padding:18px 16px 0;background:#0f1416;">
-        <p style="margin:0 0 8px;color:#f6c35b;font-size:13px;line-height:1.4;font-weight:900;letter-spacing:0;">VIBE FOOTBALL</p>
-        <h1 style="margin:0 0 14px;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:30px;font-weight:900;line-height:1.12;letter-spacing:0;">比赛日<br />重点观察</h1>
-        <p style="margin:0;border-left:4px solid #f6c35b;padding-left:12px;color:#dbe5e2;font-size:15px;line-height:1.85;">不是只看胜负，而是看节奏、风险和关键场面。</p>
-        <p style="margin:14px 0 0;color:#dbe5e2;font-size:13px;line-height:1.8;"><strong style="color:#ffffff;">{html.escape(meta["label"])}</strong> · 今日 {html.escape(meta["match_count"])} 场</p>
-        <p style="margin:2px 0 0;color:#aebbb7;font-size:13px;line-height:1.8;">冷门观察：{html.escape(meta["risk_match"])} · {html.escape(meta["risk_value"])}</p>
-      </section>
-    </section>
-    """
+    return f'<section style="margin:0 0 0;padding:0;"><img src="{hero_url}" alt="Vibe Football 比赛日重点观察" style="display:block;width:100%;max-width:100%;height:auto;margin:0;border:0;" /></section>'
 
 
 def _render_preview_item(label: str, value: str, color: str) -> str:
-    return f"""
-    <section style="margin:10px 0 0;padding:11px 12px;border:1px solid rgba(246,195,91,0.20);border-radius:12px;background:rgba(255,255,255,0.055);">
-      <strong style="display:block;margin:0 0 5px;color:{color};font-size:13px;line-height:1.5;font-weight:900;">{html.escape(label)}</strong>
-      <p style="margin:0;color:#cbd5d1;font-size:14px;line-height:1.78;">{html.escape(value)}</p>
-    </section>
-    """
+    return f'<section style="margin:7px 0 0;padding:8px 10px 9px;border:1px solid #d8c99a;border-radius:10px;"><p style="margin:0 0 2px;color:{color};font-size:14px;line-height:1.18;font-weight:900;">{html.escape(label)}</p><p style="margin:0;color:#303437;font-size:14px;line-height:1.58;">{html.escape(value)}</p></section>'
 
 
 def _render_match_previews(source: dict[str, Any] | None) -> str:
@@ -475,30 +466,12 @@ def _render_match_previews(source: dict[str, Any] | None) -> str:
         group = str(match.get("group") or "").strip()
         venue = str(match.get("venue") or "").strip()
         meta = " · ".join(item for item in (group, venue) if item)
+        time_label = html.escape(_format_match_datetime(match.get("kickoff")))
+        title = f"{html.escape(str(match.get('home') or '待定'))} vs {html.escape(str(match.get('away') or '待定'))}"
         rows.append(
-            f"""
-            <section style="display:block;margin:0 0 20px;border-top:1px solid rgba(255,255,255,0.14);padding:16px 0 0;background:#0f1416;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-                <tr>
-                  <td width="70" valign="top" style="width:70px;color:#f6c35b;font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:900;line-height:1.2;">{html.escape(_format_time(match.get("kickoff")).split(" ")[-1])}</td>
-                  <td valign="top">
-                    <strong style="display:block;margin:0 0 4px;color:#ffffff;font-size:18px;font-weight:900;line-height:1.45;">{html.escape(str(match.get("home") or "待定"))} vs {html.escape(str(match.get("away") or "待定"))}</strong>
-                    <p style="margin:0;color:#aebbb7;font-size:12px;line-height:1.6;font-weight:800;">{html.escape(meta)}</p>
-                  </td>
-                </tr>
-              </table>
-              {_render_preview_item("胜负分析", _match_logic_text(match), "#f6c35b")}
-              {_render_preview_item("比分进球", _match_score_text(match), "#fbbf24")}
-              {_render_preview_item("冷门风险", _match_risk_text(match), "#7dd3c7")}
-            </section>
-            """
+            f'<section style="display:block;margin:0 0 14px;padding:0;background:#ffffff;"><section style="margin:0 0 6px;padding:8px 0 3px;border-top:1px solid #e5e0d4;"><p style="margin:0 0 1px;white-space:nowrap;color:#111417;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#c08a24;font-size:19px;font-weight:900;">{time_label}</span><span style="color:#111417;font-size:17px;font-weight:900;">&nbsp;&nbsp;{title}</span></p><p style="margin:0 0 0 108px;white-space:nowrap;color:#4d5356;font-size:13px;line-height:1.3;">{html.escape(meta)}</p></section>{_render_preview_item("胜负分析", _match_logic_text(match), "#c08a24")}{_render_preview_item("比分进球", _match_score_text(match), "#c08a24")}{_render_preview_item("冷门风险", _match_risk_text(match), "#c08a24")}</section>'
         )
-    return f"""
-    <section style="margin:0 0 24px;padding:0 16px 2px;background:#0f1416;color:#ffffff;">
-      <h2 style="margin:0 0 16px;color:#ffffff;font-family:Georgia,'Times New Roman','Songti SC',SimSun,serif;font-size:22px;font-weight:900;line-height:1.45;">赛事前瞻</h2>
-      {''.join(rows)}
-    </section>
-    """
+    return f'<section style="margin:0 0 18px;padding:0 20px 0;color:#111417;">{"".join(rows)}</section>'
 
 
 def _drop_title_and_schedule(markdown_text: str) -> str:
@@ -539,35 +512,27 @@ def render_wechat_html(markdown_text: str, source: dict[str, Any] | None = None)
         cleaned = re.sub(r"\s+on\w+\s*=\s*(['\"]).*?\1", "", cleaned, flags=re.I | re.S)
 
     style_map = {
-        "h1": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:23px;font-weight:900;line-height:1.45;margin:8px 0 18px;color:#ffffff;"',
-        "h2": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:21px;font-weight:900;line-height:1.5;margin:30px 0 14px;color:#ffffff;"',
-        "h3": 'style="font-family:Georgia,\'Times New Roman\',\'Songti SC\',SimSun,serif;font-size:18px;font-weight:900;line-height:1.5;margin:24px 0 10px;color:#ffffff;"',
-        "p": 'style="font-size:15px;line-height:1.9;margin:0 0 14px;color:#cbd5d1;"',
-        "ul": 'style="list-style:none;padding-left:0;margin:0 0 18px;color:#cbd5d1;"',
-        "ol": 'style="padding-left:20px;margin:0 0 18px;color:#57534e;"',
-        "li": 'style="font-size:15px;line-height:1.85;margin:0 0 12px;border-bottom:1px solid rgba(255,255,255,0.12);padding:0 0 12px;color:#cbd5d1;"',
-        "blockquote": 'style="border-left:4px solid #f6c35b;padding:10px 12px;margin:16px 0;background:rgba(255,255,255,0.055);color:#dbe5e2;"',
-        "strong": 'style="font-weight:900;color:#ffffff;"',
-        "em": 'style="font-style:normal;color:#f6c35b;font-weight:700;"',
+        "h1": 'style="font-size:22px;font-weight:900;line-height:1.45;margin:8px 0 14px;color:#111417;"',
+        "h2": 'style="font-size:19px;font-weight:900;line-height:1.45;margin:24px 0 10px;color:#111417;"',
+        "h3": 'style="font-size:17px;font-weight:900;line-height:1.45;margin:20px 0 8px;color:#111417;"',
+        "p": 'style="font-size:15px;line-height:1.82;margin:0 0 12px;color:#303437;"',
+        "ul": 'style="list-style:none;padding-left:0;margin:0 0 16px;color:#303437;"',
+        "ol": 'style="padding-left:20px;margin:0 0 16px;color:#303437;"',
+        "li": 'style="font-size:15px;line-height:1.75;margin:0 0 10px;border-bottom:1px solid #eee5d2;padding:0 0 10px;color:#303437;"',
+        "blockquote": 'style="border-left:4px solid #c08a24;padding:9px 11px;margin:14px 0;background:#fffaf0;color:#303437;"',
+        "strong": 'style="font-weight:900;color:#111417;"',
+        "em": 'style="font-style:normal;color:#c08a24;font-weight:700;"',
     }
     styled = cleaned
     for tag, style in style_map.items():
         styled = re.sub(fr"<{tag}>", f"<{tag} {style}>", styled)
     styled = styled.replace(
         DISCLAIMER,
-        f'<span style="display:block;padding:12px 14px;border-radius:10px;background:rgba(246,195,91,0.10);border:1px solid rgba(246,195,91,0.24);color:#f6c35b;font-size:14px;line-height:1.75;">{DISCLAIMER}</span>',
+        f'<span style="display:block;padding:9px 11px;border-radius:8px;border:1px solid #eadcae;color:#6d5b21;font-size:13px;line-height:1.65;">{DISCLAIMER}</span>',
     )
     poster = _render_html_poster(source)
     previews = _render_match_previews(source)
-    return f"""
-    <section style="max-width:677px;margin:0 auto;padding:0 0 22px;background:#0f1416;color:#ffffff;">
-      {poster}
-      {previews}
-      <section style="padding:0 16px;">
-        {styled}
-      </section>
-    </section>
-    """
+    return f'<section style="max-width:677px;margin:0 auto;padding:0 0 22px;color:#111417;">{poster}{previews}<section style="padding:0 20px;">{styled}</section></section>'
 
 
 def get_wechat_access_token() -> str:
@@ -595,11 +560,12 @@ def upload_wechat_content_image(access_token: str) -> str:
     image_path = _hero_image_path()
     if not image_path.exists():
         raise RuntimeError(f"WeChat hero image not found: {image_path}")
+    mime_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
     with image_path.open("rb") as image_file:
         response = httpx.post(
             "https://api.weixin.qq.com/cgi-bin/media/uploadimg",
             params={"access_token": access_token},
-            files={"media": (image_path.name, image_file, "image/jpeg")},
+            files={"media": (image_path.name, image_file, mime_type)},
             timeout=30,
         )
     response.raise_for_status()
