@@ -86,7 +86,7 @@ DEEPSEEK_WECHAT_THINKING=enabled
 
 - `DEEPSEEK_API_KEY` 需要在本地 `.env` 配置，不能提交真实 token。
 - `ADMIN_PAGE_PASSWORD` 是管理端进入密码，建议只在本地 `.env` 配置。
-- `SERPER_API_KEY` 未配置时，后端不能做真实网页检索，只能用 seed 数据和 DeepSeek 基于已知结构化数据生成。
+- `SERPER_API_KEY` 未配置时，后端不能做真实网页检索；管理端“检索”和生成赛前情报会回退为 DeepSeek 赛前伤停/阵容动态摘要，并保存到 `research_sources` 供报告生成使用。DeepSeek 摘要必须保守标记“待官方确认/暂无公开确认”，不能当作官方伤停来源。
 - `API_FOOTBALL_KEY`、`SPORTMONKS_API_TOKEN` 当前同步实现还是占位，未接完整生产映射。
 
 不要在响应、日志、文档里打印 `.env` 里的真实 token。
@@ -359,7 +359,7 @@ V1 约束：
 - 只做“每日前瞻”，不做单场前瞻、冠军预测文章和自动发布。
 - DeepSeek 只负责公众号化表达，不允许创造输入 source 以外的事实。
 - fact check 失败时状态为 `fact_failed`，禁止推送草稿箱。
-- 默认只生成文章；只有 `WECHAT_DAILY_PREVIEW_AUTO_DRAFT=true` 时定时任务才会自动推送草稿箱。
+- 定时任务 `公众号每日前瞻生成并推草稿` 会生成文章并自动推送到微信公众号草稿箱；后台公众号模块的“生成每日前瞻”按钮仍只生成文章，预览后可手动点“推送草稿箱”。
 - 草稿封面使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，第一版不动态生成封面。
 - 正文标题图使用仓库内固定 PNG：`assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`；推草稿时自动调用微信 `media/uploadimg` 上传并替换正文 URL。标题图不需要手动上传素材库，封面才需要 `WECHAT_DEFAULT_COVER_MEDIA_ID`。
 - 微信正文样式采用 A17/A15 方向：白底、PNG 透明圆角标题图、金色日期时间、金色小标题、无分割线、无 table、无整篇深色背景。

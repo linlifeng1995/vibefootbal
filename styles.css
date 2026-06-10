@@ -549,8 +549,20 @@ h1 {
   margin-bottom: 14px;
 }
 
+.formation-title > div {
+  min-width: 0;
+}
+
 .formation-title h3 {
   font-size: 21px;
+}
+
+.formation-title small {
+  display: block;
+  margin-top: 4px;
+  color: var(--soft);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .formation-title span {
@@ -559,6 +571,16 @@ h1 {
   font-size: 13px;
   line-height: 1.5;
   text-align: right;
+}
+
+.formation-title .lineup-status {
+  border: 1px solid rgba(229, 190, 93, 0.28);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--gold);
+  background: rgba(229, 190, 93, 0.08);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .formation-grid {
@@ -664,14 +686,36 @@ h1 {
   grid-template-rows: 22px minmax(0, 1fr) 34px minmax(0, 1fr) 22px;
   gap: 8px;
   min-height: 760px;
-  padding: 14px;
+  padding: 20px 18px;
   overflow: hidden;
-  border: 1px solid rgba(119, 151, 146, 0.24);
-  border-radius: 16px;
+  border: 1px solid rgba(201, 236, 219, 0.28);
+  border-radius: 8px;
   background:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px) center / 50% 100% no-repeat,
-    radial-gradient(circle at center, transparent 0 18%, rgba(255, 255, 255, 0.1) 19% 20%, transparent 21%),
-    linear-gradient(180deg, rgba(28, 78, 66, 0.88), rgba(13, 42, 45, 0.94));
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 72px),
+    linear-gradient(180deg, rgba(34, 111, 82, 0.95), rgba(19, 79, 73, 0.96));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.full-pitch::before {
+  position: absolute;
+  inset: 18px;
+  border: 2px solid rgba(242, 250, 246, 0.34);
+  border-radius: 6px;
+  content: "";
+  pointer-events: none;
+}
+
+.full-pitch::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(180px, 36%);
+  aspect-ratio: 1;
+  border: 2px solid rgba(242, 250, 246, 0.3);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 .team-half {
@@ -691,9 +735,9 @@ h1 {
 
 .center-line::before,
 .center-line::after {
-  height: 1px;
+  height: 2px;
   flex: 1;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(242, 250, 246, 0.34);
   content: "";
 }
 
@@ -705,17 +749,24 @@ h1 {
 }
 
 .goal-box {
+  position: relative;
+  z-index: 1;
   width: min(220px, 42%);
   justify-self: center;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 0 0 14px 14px;
+  border: 2px solid rgba(242, 250, 246, 0.3);
+  border-top: 0;
+  border-radius: 0 0 4px 4px;
 }
 
 .goal-box-bottom {
-  border-radius: 14px 14px 0 0;
+  border-top: 2px solid rgba(242, 250, 246, 0.3);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
 }
 
 .pitch-line {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
@@ -961,10 +1012,127 @@ h1 {
   margin-bottom: 6px;
 }
 
+.factor-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 6px;
+}
+
+.factor-title strong {
+  overflow: hidden;
+  margin-bottom: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factor-help {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+}
+
+.factor-help::after {
+  left: auto;
+  right: 0;
+  width: min(300px, 72vw);
+  transform: translateY(-4px);
+}
+
+.factor-help:hover::after,
+.factor-help:focus-visible::after,
+.factor-help:focus::after {
+  transform: translateY(0);
+}
+
 .model-factor-grid span {
   margin-bottom: 6px;
   color: var(--gold);
   font-weight: 900;
+}
+
+.factor-bar {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(119, 151, 146, 0.24);
+  border-radius: 999px;
+  margin: 8px 0 7px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.factor-fill {
+  display: block;
+  min-width: 0;
+  height: 100%;
+}
+
+.factor-fill.home {
+  background: linear-gradient(90deg, rgba(112, 202, 190, 0.88), rgba(112, 202, 190, 0.58));
+}
+
+.factor-fill.away {
+  background: linear-gradient(90deg, rgba(238, 197, 123, 0.62), rgba(238, 197, 123, 0.9));
+}
+
+.factor-fill.draw {
+  background: rgba(215, 224, 221, 0.34);
+}
+
+.factor-bar-relative i {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 50%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.52);
+  transform: translateX(-0.5px);
+}
+
+.factor-bar-prob {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.factor-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 7px;
+  color: var(--soft);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.factor-meta span,
+.model-factor-grid .factor-meta span {
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  color: var(--soft);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.factor-meta span:last-child {
+  text-align: right;
+}
+
+.factor-meta strong {
+  margin: 0;
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.factor-meta-prob {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .model-factor-grid p {
@@ -1926,6 +2094,13 @@ h1 {
     text-align: left;
   }
 
+  .formation-title .lineup-status {
+    width: fit-content;
+    max-width: 100%;
+    border-radius: 8px;
+    white-space: normal;
+  }
+
   .pitch {
     height: auto;
     min-height: 300px;
@@ -1947,8 +2122,8 @@ h1 {
   }
 
   .full-pitch {
-    min-height: 650px;
-    padding: 10px;
+    min-height: 660px;
+    padding: 18px 12px;
     gap: 6px;
   }
 
@@ -2347,10 +2522,28 @@ h1 {
 .admin-job-config select {
   min-height: 38px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 0 10px;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: #13252a;
+}
+
+.admin-card select {
+  color: #f4f8f7;
+  background-color: #13252a;
+  color-scheme: dark;
+}
+
+.admin-card select:focus,
+.admin-card input:focus {
+  border-color: rgba(217, 184, 109, 0.72);
+  box-shadow: 0 0 0 3px rgba(217, 184, 109, 0.16);
+  outline: none;
+}
+
+.admin-card select option {
+  color: #f4f8f7;
+  background-color: #13252a;
 }
 
 .admin-job-toggle {
@@ -2434,10 +2627,10 @@ h1 {
   min-height: 44px;
   flex: 1;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 0 12px;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
+  background: #13252a;
 }
 
 .admin-token-row select {

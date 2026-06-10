@@ -117,6 +117,8 @@ def _extract_report_fields(report_payload: dict[str, Any]) -> dict[str, Any]:
         "logic": content.get("logic"),
         "score_prediction": content.get("score_prediction"),
         "totals_prediction": content.get("totals_prediction"),
+        "player_performance": content.get("player_performance"),
+        "player_spotlight": content.get("player_spotlight"),
         "risk_points": content.get("risk_points"),
         "key_matchups": content.get("key_matchups"),
         "match_conditions": content.get("match_conditions"),
@@ -347,6 +349,38 @@ def _format_pct(value: Any) -> str:
         return "--"
 
 
+def _match_probability_text(match: dict[str, Any], bold: bool = False) -> str:
+    probs = match.get("probabilities") or {}
+    home = str(match.get("home") or "主队")
+    away = str(match.get("away") or "客队")
+    parts = [
+        f"{home}胜 {_format_pct(probs.get('home'))}",
+        f"平局 {_format_pct(probs.get('draw'))}",
+        f"{away}胜 {_format_pct(probs.get('away'))}",
+    ]
+    text = " / ".join(parts)
+    return f"**{text}**" if bold else text
+
+
+def _bold_text(value: str, enabled: bool = True) -> str:
+    return f"**{value}**" if enabled else value
+
+
+def _strip_score_template_repetition(text: Any) -> str:
+    value = re.sub(r"\s+", " ", str(text or "")).strip()
+    if not value:
+        return ""
+    patterns = [
+        r"首选比分(?:参考|倾向)?\s*[0-9]+-[0-9]+[，,、；;。\s]*",
+        r"备选(?:方向|比分)?(?:为|：|:)?\s*[0-9]+-[0-9]+(?:[、/]\s*[0-9]+-[0-9]+)*[，,、；;。\s]*",
+        r"进球数倾向(?:更接近|为)?\s*进球偏[多少][，,、；;。\s]*",
+        r"本场进球数倾向(?:更接近|为)?\s*进球偏[多少][，,、；;。\s]*",
+    ]
+    for pattern in patterns:
+        value = re.sub(pattern, "", value)
+    return value.strip(" ，,。；;")
+
+
 def _format_time(value: Any) -> str:
     if not value:
         return "时间待定"
@@ -378,6 +412,54 @@ def _list_text(value: Any) -> str:
     return str(value or "")
 
 
+TEMPLATE_RISK_FRAGMENTS = (
+    "本场需要重点观察",
+    "草皮、气温和旅途恢复会影响冲刺质量",
+    "赛地适应、旅行距离和恢复周期会影响下半场质量",
+    "模型只能把它们计入不确定性区间",
+)
+
+
+def _list_items(value: Any) -> list[str]:
+    if isinstance(value, list):
+        items = value
+    elif isinstance(value, dict):
+        items = list(value.values())
+    elif value:
+        items = [value]
+    else:
+        items = []
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        text = str(item or "").strip().rstrip("。；;")
+        if not text or any(fragment in text for fragment in TEMPLATE_RISK_FRAGMENTS):
+            continue
+        signature = re.sub(r"[，。；：、\s\dA-Za-z%-]+", "", text)[:40]
+        if signature in seen:
+            continue
+        seen.add(signature)
+        cleaned.append(text)
+    return cleaned
+
+
+def _match_player_text(match: dict[str, Any]) -> str:
+    spotlight = []
+    for item in match.get("player_spotlight") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        impact = _clip_text(item.get("impact"), 92).rstrip("。；; ")
+        if name and impact:
+            spotlight.append(f"{name}：{impact}")
+        if len(spotlight) >= 2:
+            break
+    if spotlight:
+        return "；".join(spotlight).rstrip("。；; ") + "。"
+    performance = "；".join(_list_items(match.get("player_performance"))[:2])
+    return _clip_text(performance, 220) if performance else "关键球员表现待官方首发和临场状态确认后更新。"
+
+
 def _clip_text(value: Any, limit: int = 220) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     if len(text) <= limit:
@@ -394,7 +476,8 @@ def _clip_text(value: Any, limit: int = 220) -> str:
 def _match_logic_text(match: dict[str, Any]) -> str:
     if match.get("reportMissing"):
         return "报告待更新，先关注赛程、基础概率和临场首发。"
-    return _clip_text(match.get("logic") or match.get("summary") or "胜负分析待更新。", 260)
+    logic = _clip_text(match.get("logic") or match.get("summary") or "胜负分析待更新。", 230)
+    return f"胜平负概率：{_match_probability_text(match, bold=True)}。{logic}"
 
 
 def _match_score_text(match: dict[str, Any]) -> str:
@@ -406,24 +489,27 @@ def _match_score_text(match: dict[str, Any]) -> str:
     primary = score.get("primary") or "--"
     alternatives = " / ".join(str(item) for item in score.get("alternatives") or [] if item)
     total_pick = totals.get("displayPick") or totals.get("pick") or "--"
-    score_analysis = _clip_text(score.get("analysis"), 170)
-    totals_analysis = _clip_text(totals.get("analysis"), 150)
-    parts = [f"首选比分 {primary}"]
+    score_analysis = _clip_text(_strip_score_template_repetition(score.get("analysis")), 160)
+    totals_analysis = _clip_text(_strip_score_template_repetition(totals.get("analysis")), 130)
+    parts = [f"首选比分 {_bold_text(primary)}"]
     if alternatives:
-        parts.append(f"备选 {alternatives}")
+        parts.append(f"备选 {_bold_text(alternatives)}")
     if total_pick and total_pick != "--":
-        parts.append(f"进球数倾向 {total_pick}")
+        parts.append(f"进球数倾向 {_bold_text(total_pick)}")
     headline = "，".join(parts) + "。"
     detail_parts = []
     if score_analysis:
-        detail_parts.append(score_analysis)
+        detail_parts.append(score_analysis.rstrip("。；; "))
     if totals_analysis:
-        detail_parts.append(totals_analysis)
-    return headline + (_clip_text(" ".join(detail_parts), 260) if detail_parts else "")
+        detail_parts.append(totals_analysis.rstrip("。；; "))
+    detail_text = "。".join(part for part in detail_parts if part)
+    if detail_text:
+        detail_text = _clip_text(detail_text, 260).rstrip("。；; ") + "。"
+    return headline + detail_text
 
 
 def _match_risk_text(match: dict[str, Any]) -> str:
-    risk_points = _list_text(match.get("risk_points"))
+    risk_points = "；".join(_list_items(match.get("risk_points"))[:2])
     risk_prefix = f"爆冷指数 {_format_pct(match.get('upsetIndex'))}"
     return f"{risk_prefix}。{_clip_text(risk_points, 180) if risk_points else '主要风险来自临场阵容、比赛节奏和关键失误。'}"
 
@@ -437,6 +523,7 @@ def _match_preview_section_markdown(source: dict[str, Any]) -> str:
                 f"### {_format_time(match.get('kickoff')).split(' ')[-1]} {match.get('home')} vs {match.get('away')}",
                 f"- 胜负分析：{_match_logic_text(match)}",
                 f"- 比分预测：{_match_score_text(match)}",
+                f"- 关键球员表现：{_match_player_text(match)}",
                 f"- 冷门风险：{_match_risk_text(match)}",
             ]
         )
@@ -533,6 +620,8 @@ async def _deepseek_daily_preview(source: dict[str, Any]) -> dict[str, str]:
             "title 控制在 26-42 个中文字符左右，可以使用冒号；可使用已知球队修饰词，如德国战车、桑巴军团、高卢雄鸡、斗牛士军团、橙衣军团、三狮军团、蓝武士、太极虎，但不能编造输入外事实或夸大确定性。",
             "赛事前瞻必须按比赛逐场展开，每场固定包含胜负分析、比分预测、冷门风险三项，不要先罗列赛程再单独写重点场次。",
             "胜负分析必须优先使用每场的 logic 字段；比分预测必须使用 score_prediction 和 totals_prediction，并尽量展开其中的 analysis 内容；冷门风险只使用 upsetIndex 和 risk_points。",
+            "同一天多场比赛不能重复使用相同句架；禁止批量复用“需要重点观察”“草皮、气温和旅途恢复”“赛地适应、旅行距离和恢复周期”等模板化表达。",
+            "如果 source 中多场比赛的某些风险点或赛前条件高度相似，需要合并、改写或舍弃，只保留对该场比赛最具体的内容。",
             "输出严格 JSON，字段为 title、digest、markdown。",
         ],
     }
@@ -659,6 +748,15 @@ def _render_preview_item(label: str, value: str, color: str) -> str:
     return f'<section style="margin:7px 0 0;padding:8px 10px 9px;border:1px solid #d8c99a;border-radius:10px;"><p style="margin:0 0 2px;color:{color};font-size:14px;line-height:1.18;font-weight:900;">{html.escape(label)}</p><p style="margin:0;color:#303437;font-size:14px;line-height:1.58;">{html.escape(value)}</p></section>'
 
 
+def _inline_markdown_to_wechat_html(value: str) -> str:
+    escaped = html.escape(str(value or ""))
+    return re.sub(r"\*\*(.+?)\*\*", r'<strong style="font-weight:900;color:#111417;">\1</strong>', escaped)
+
+
+def _render_preview_item_rich(label: str, value: str, color: str) -> str:
+    return f'<section style="margin:7px 0 0;padding:8px 10px 9px;border:1px solid #d8c99a;border-radius:10px;"><p style="margin:0 0 2px;color:{color};font-size:14px;line-height:1.18;font-weight:900;">{html.escape(label)}</p><p style="margin:0;color:#303437;font-size:14px;line-height:1.58;">{_inline_markdown_to_wechat_html(value)}</p></section>'
+
+
 def _render_match_previews(source: dict[str, Any] | None) -> str:
     matches = list((source or {}).get("matches") or [])
     if not matches:
@@ -671,7 +769,7 @@ def _render_match_previews(source: dict[str, Any] | None) -> str:
         time_label = html.escape(_format_match_datetime(match.get("kickoff")))
         title = f"{html.escape(str(match.get('home') or '待定'))} vs {html.escape(str(match.get('away') or '待定'))}"
         rows.append(
-            f'<section style="display:block;margin:0 0 14px;padding:0;background:#ffffff;"><section style="margin:0 0 6px;padding:8px 0 3px;"><p style="margin:0 0 1px;white-space:nowrap;color:#111417;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#c08a24;font-size:19px;font-weight:900;">{time_label}</span><span style="color:#111417;font-size:17px;font-weight:900;">&nbsp;&nbsp;{title}</span></p><p style="margin:0 0 0 108px;white-space:nowrap;color:#4d5356;font-size:13px;line-height:1.3;">{html.escape(meta)}</p></section>{_render_preview_item("胜负分析", _match_logic_text(match), "#c08a24")}{_render_preview_item("比分预测", _match_score_text(match), "#c08a24")}{_render_preview_item("冷门风险", _match_risk_text(match), "#c08a24")}</section>'
+            f'<section style="display:block;margin:0 0 14px;padding:0;background:#ffffff;"><section style="margin:0 0 6px;padding:8px 0 3px;"><p style="margin:0 0 1px;white-space:nowrap;color:#111417;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#c08a24;font-size:19px;font-weight:900;">{time_label}</span><span style="color:#111417;font-size:17px;font-weight:900;">&nbsp;&nbsp;{title}</span></p><p style="margin:0 0 0 108px;white-space:nowrap;color:#4d5356;font-size:13px;line-height:1.3;">{html.escape(meta)}</p></section>{_render_preview_item_rich("胜负分析", _match_logic_text(match), "#c08a24")}{_render_preview_item_rich("比分预测", _match_score_text(match), "#c08a24")}{_render_preview_item("关键球员表现", _match_player_text(match), "#c08a24")}{_render_preview_item("冷门风险", _match_risk_text(match), "#c08a24")}</section>'
         )
     return f'<section style="margin:0 0 18px;padding:0 20px 0;color:#111417;">{"".join(rows)}</section>'
 

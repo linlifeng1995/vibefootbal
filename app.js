@@ -376,12 +376,16 @@ function renderFormationSide(lineup = {}) {
 }
 
 function renderFormations(lineups = {}) {
+  const statusText = lineups.note || "官方首发未发布，目前为预测版。";
   return `
     <section class="formation-panel">
       <div class="heat-line"></div>
       <div class="formation-title">
-        <h3>预测布阵图</h3>
-        <span>${lineups.note || "官方首发未发布，目前为预测版。"}</span>
+        <div>
+          <h3>赛前阵容视图</h3>
+          <small>按阵型层级展示，官方首发公布后自动切换为正式版</small>
+        </div>
+        <span class="lineup-status">${statusText}</span>
       </div>
       ${renderFullFormationPitch(lineups.home || {}, lineups.away || {})}
     </section>
@@ -583,6 +587,72 @@ function factorValue(factor = {}) {
   return `${signedValue(factor.homeImpact)} / ${signedValue(factor.awayImpact)}`;
 }
 
+function boundedPercent(value, fallback = 0) {
+  const number = Number(value);
+  if (Number.isNaN(number)) return fallback;
+  return Math.max(0, Math.min(100, number));
+}
+
+function factorTeams(report = {}) {
+  const match = state.selectedReport?.match || report.match || {};
+  return {
+    home: match.home || match.home_name || "主队",
+    away: match.away || match.away_name || "客队",
+  };
+}
+
+function isGoalTrendFactor(factor = {}) {
+  const name = String(factor.name || "");
+  return name.includes("进球") || name.includes("比分") || name.includes("Poisson") || name.includes("杩涚悆") || name.includes("姣斿垎");
+}
+
+function renderRelativeFactorBar(factor = {}, teams = {}) {
+  const homeImpact = Number(factor.homeImpact || 0);
+  const awayImpact = Number(factor.awayImpact || 0);
+  const homeWidth = boundedPercent(50 + homeImpact, 50);
+  const awayWidth = 100 - homeWidth;
+  const leader = Math.abs(homeImpact) < 0.05 ? "双方接近" : homeImpact > 0 ? `${teams.home}占优` : `${teams.away}占优`;
+  const edge = Math.max(Math.abs(homeImpact), Math.abs(awayImpact));
+  const edgeText = edge ? ` +${edge.toFixed(1)}` : "";
+  return `
+    <div class="factor-bar factor-bar-relative" aria-label="${factor.name} ${leader}">
+      <span class="factor-fill home" style="width:${homeWidth}%"></span>
+      <span class="factor-fill away" style="width:${awayWidth}%"></span>
+      <i></i>
+    </div>
+    <div class="factor-meta">
+      <span>${teams.home}</span>
+      <strong>${leader}${edgeText}</strong>
+      <span>${teams.away}</span>
+    </div>
+  `;
+}
+
+function renderGoalTrendBar(factor = {}, report = {}, teams = {}) {
+  const prediction = report.prediction || {};
+  const home = boundedPercent(prediction.home_win ?? factor.homeImpact, 0);
+  const away = boundedPercent(prediction.away_win ?? factor.awayImpact, 0);
+  const draw = boundedPercent(prediction.draw, Math.max(0, 100 - home - away));
+  const total = home + draw + away || 100;
+  return `
+    <div class="factor-bar factor-bar-prob" aria-label="${factor.name} 胜平负概率">
+      <span class="factor-fill home" style="width:${(home / total) * 100}%"></span>
+      <span class="factor-fill draw" style="width:${(draw / total) * 100}%"></span>
+      <span class="factor-fill away" style="width:${(away / total) * 100}%"></span>
+    </div>
+    <div class="factor-meta factor-meta-prob">
+      <span>${teams.home} ${home.toFixed(1)}%</span>
+      <strong>平 ${draw.toFixed(1)}%</strong>
+      <span>${teams.away} ${away.toFixed(1)}%</span>
+    </div>
+  `;
+}
+
+function renderFactorVisual(factor = {}, report = {}) {
+  const teams = factorTeams(report);
+  return isGoalTrendFactor(factor) ? renderGoalTrendBar(factor, report, teams) : renderRelativeFactorBar(factor, teams);
+}
+
 function attrText(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -641,6 +711,28 @@ function publicFactor(factor = {}) {
   return { ...factor, name, detail };
 }
 
+function factorTooltip(factor = {}) {
+  const name = String(factor.name || "");
+  if (name.includes("基础评分")) {
+    return "由球队长期强度评分、基础实力档位和主客/赛地修正组成；不等同于球队身价，暂未直接接入实时球员身价。";
+  }
+  if (name.includes("近期状态")) {
+    return "由近期状态分、比赛强度、进入比赛节奏的速度等短期动量组成。";
+  }
+  if (name.includes("攻防匹配")) {
+    return "由本队进攻推进质量与对手防守承压能力组合而成，体现一方进攻是否刚好打到另一方弱点。";
+  }
+  if (name.includes("进球走势")) {
+    return "由双方攻防效率推导预期进球，再转换为胜平负概率和首选比分区间；这里显示的是概率条，不是相对差值。";
+  }
+  return "该项为赛前模型因子，用于解释胜平负概率的主要来源。";
+}
+
+function renderFactorTitle(factor = {}) {
+  const tooltip = attrText(factorTooltip(factor));
+  return `<div class="factor-title"><strong>${factor.name}</strong><button class="method-help factor-help" type="button" aria-label="查看${factor.name}组成说明" data-tooltip="${tooltip}">?</button></div>`;
+}
+
 function renderModelLogic(content = {}, report = {}) {
   const factors = (report.factors || []).map(publicFactor).filter(Boolean);
   const logicText = cleanLogicText(content.logic) || "胜负逻辑待模型生成。";
@@ -650,7 +742,7 @@ function renderModelLogic(content = {}, report = {}) {
       <div class="heat-line"></div>
       <div class="model-logic-head">
         <div>
-          <h3>胜负逻辑 <button class="method-help" type="button" aria-label="查看模型计算说明" data-tooltip="${methodNote}" title="${methodNote}">?</button></h3>
+          <h3>胜负逻辑 <button class="method-help" type="button" aria-label="查看模型计算说明" data-tooltip="${methodNote}">?</button></h3>
         </div>
         <span>赛前判断</span>
       </div>
@@ -662,8 +754,8 @@ function renderModelLogic(content = {}, report = {}) {
                 .map(
                   (factor) => `
                     <article>
-                      <strong>${factor.name}</strong>
-                      <span>${factorValue(factor)}</span>
+                      ${renderFactorTitle(factor)}
+                      ${renderFactorVisual(factor, report)}
                       <p>${factor.detail || ""}</p>
                     </article>
                   `,
@@ -943,6 +1035,19 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
   if (!button) return;
   state.view = button.dataset.view;
   render();
+});
+
+document.addEventListener("click", (event) => {
+  const activeHelp = document.activeElement?.closest?.(".method-help");
+  if (!activeHelp) return;
+  const clickedHelp = event.target.closest?.(".method-help");
+  if (clickedHelp !== activeHelp) activeHelp.blur();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const activeHelp = document.activeElement?.closest?.(".method-help");
+  if (activeHelp) activeHelp.blur();
 });
 
 loadInitialData();

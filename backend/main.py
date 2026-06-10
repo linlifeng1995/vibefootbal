@@ -98,6 +98,10 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES = env_int("PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES", 90)
+PREMATCH_LINEUP_REFRESH_INTERVAL_MINUTES = env_int("PREMATCH_LINEUP_REFRESH_INTERVAL_MINUTES", 15)
+
+
 def db() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -326,17 +330,17 @@ JOB_DEFINITIONS: list[dict[str, Any]] = [
         "id": "prematch_refresh",
         "name": "临场赛前情报更新",
         "kind": "prematch_reports",
-        "trigger": "每 30 分钟",
-        "default_config": {"mode": "interval", "hour": None, "minute": None, "interval_minutes": 30, "enabled": True},
-        "description": "检查未来 3 小时内比赛，临近开赛时刷新报告。",
+        "trigger": f"每 {PREMATCH_LINEUP_REFRESH_INTERVAL_MINUTES} 分钟",
+        "default_config": {"mode": "interval", "hour": None, "minute": None, "interval_minutes": PREMATCH_LINEUP_REFRESH_INTERVAL_MINUTES, "enabled": True},
+        "description": f"检查开赛前 {PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES} 分钟内比赛，先刷新伤停/阵容来源，再重新生成已发布报告。",
     },
     {
         "id": "wechat_daily_preview",
-        "name": "WeChat daily preview draft",
+        "name": "公众号每日前瞻生成并推草稿",
         "kind": "wechat_daily_preview",
-        "trigger": "Daily 18:00",
+        "trigger": "每天 18:00",
         "default_config": {"mode": "daily", "hour": env_int("WECHAT_DAILY_PREVIEW_HOUR", 18), "minute": 0, "interval_minutes": None, "enabled": False},
-        "description": "Generate the next matchday WeChat daily preview. Draft push is controlled by WECHAT_DAILY_PREVIEW_AUTO_DRAFT.",
+        "description": "生成最近赛事日的公众号每日前瞻，并自动推送到微信公众号草稿箱。",
     },
     {
         "id": "schedule_refresh",
@@ -525,27 +529,56 @@ def execute_job_kind(kind: str) -> dict[str, Any]:
         return {"message": f"{group['label']} 赛前情报已更新 {len(generated)} 场", "count": len(generated), "matchday": group.get("matchday")}
     if kind == "prematch_reports":
         now = datetime.now(CN_TZ)
-        window_end = now + timedelta(hours=3)
-        matches = [item for item in nearest_matchday_scope()["items"] if now <= parse_dt(item["kickoff"]).astimezone(CN_TZ) <= window_end]
+        window_end = now + timedelta(minutes=PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES)
+        matches = []
+        for row in query_public_matches():
+            item = public_match(row)
+            kickoff = parse_dt(row["kickoff"]).astimezone(CN_TZ)
+            if now <= kickoff <= window_end and match_is_visible(item, now):
+                matches.append(item)
         generated = []
+        refreshed_sources = 0
         for item in matches:
+            try:
+                import anyio
+
+                saved = anyio.run(research_match_sources, item["id"])
+                refreshed_sources += len(saved)
+            except Exception as exc:
+                log_event("research.match", "warning", f"Prematch refresh research failed: {type(exc).__name__}: {exc}", item["id"])
             report = generate_match_report(item["id"], publish=True, use_deepseek=True, reasoning_effort="high", thinking="enabled")
             generated.append(report["report_id"])
         status = "ok" if generated else "idle"
-        summary = f"未来 3 小时刷新 {len(generated)} 场" if generated else "未来 3 小时暂无临近比赛"
-        update_data_status("prematch_reports", "临场赛前情报", status, summary, "scheduler", {"reportIds": generated})
-        return {"message": summary, "count": len(generated)}
+        summary = (
+            f"Prematch lineup window {PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES}m refreshed {len(generated)} match(es), saved {refreshed_sources} source(s)"
+            if generated
+            else f"No matches inside the next {PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES} minutes"
+        )
+        update_data_status(
+            "prematch_reports",
+            "\u4e34\u573a\u8d5b\u524d\u60c5\u62a5",
+            status,
+            summary,
+            "scheduler",
+            {
+                "windowMinutes": PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES,
+                "sourceCount": refreshed_sources,
+                "reportIds": generated,
+                "matchIds": [item["id"] for item in matches],
+            },
+        )
+        return {"message": summary, "count": len(generated), "sourceCount": refreshed_sources, "windowMinutes": PREMATCH_LINEUP_REFRESH_WINDOW_MINUTES}
     if kind == "wechat_daily_preview":
         group = default_article_matchday(query_public_matches())
         if not group:
-            update_data_status("wechat_daily_preview", "WeChat daily preview", "idle", "No matchday available", "scheduler")
+            update_data_status("wechat_daily_preview", "公众号每日前瞻", "idle", "暂无可生成的比赛日", "scheduler")
             return {"message": "No matchday available", "count": 0}
         source = wechat_article.build_daily_preview_source(group["matchday"])
         article = wechat_article.generate_daily_preview_article(source)
         fact_check = wechat_article.fact_check_wechat_article(source, article)
         saved = wechat_article.save_daily_preview_article(source, article, fact_check)
         pushed = None
-        if saved["status"] == "generated" and env("WECHAT_DAILY_PREVIEW_AUTO_DRAFT", "false").lower() == "true":
+        if saved["status"] == "generated":
             with db() as conn:
                 row = conn.execute("select * from wechat_articles where id=?", (saved["id"],)).fetchone()
             pushed = wechat_article.push_wechat_draft({**dict(row), "wechat_html": row["wechat_html"]})
@@ -558,13 +591,13 @@ def execute_job_kind(kind: str) -> dict[str, Any]:
             saved["wechatMediaId"] = pushed.get("media_id")
         update_data_status(
             "wechat_daily_preview",
-            "WeChat daily preview",
+            "公众号每日前瞻",
             "ok" if saved["status"] in {"generated", "draft_pushed"} else "error",
             f"{source.get('label') or source.get('matchday')} {saved['status']}",
             "scheduler",
             {"articleId": saved["id"], "wechat": pushed or {}},
         )
-        return {"message": f"WeChat daily preview {saved['status']}: {saved['id']}", "articleId": saved["id"], "status": saved["status"]}
+        return {"message": f"公众号每日前瞻{saved['status']}: {saved['id']}", "articleId": saved["id"], "status": saved["status"]}
     if kind == "schedule_status":
         with db() as conn:
             match_count = conn.execute("select count(*) value from matches").fetchone()["value"]
@@ -659,12 +692,83 @@ def refresh_computed_data_status() -> None:
     )
 
 
+async def deepseek_match_research_sources(match_id: str, limit: int = 8) -> list[dict[str, str]]:
+    bundle = match_bundle(match_id)
+    api_key = env("DEEPSEEK_API_KEY")
+    if not api_key:
+        log_event("research.match", "warning", "SERPER_API_KEY and DEEPSEEK_API_KEY are not configured; skipped research", match_id)
+        return []
+    model = env("DEEPSEEK_MODEL", "deepseek-chat")
+    prompt = {
+        "match": {
+            "id": match_id,
+            "home": bundle["home_name"],
+            "away": bundle["away_name"],
+            "kickoff": bundle["kickoff"],
+            "venue": bundle["venue"],
+            "home_key_players": bundle.get("home_profile", {}).get("stars", []),
+            "away_key_players": bundle.get("away_profile", {}).get("stars", []),
+        },
+        "instruction": (
+            "为这场世界杯赛前情报补充球员、伤停、疑似缺阵、预计首发和阵型动态，输出严格 JSON："
+            "{\"items\":[{\"title\":\"...\",\"snippet\":\"...\"}]}。"
+            "每条 snippet 必须说明信息性质：已确认/待官方确认/暂无公开确认。"
+            "如果无法确认具体伤停，不要编造伤停名单，写“暂无公开确认的伤停信息，需等待官方名单或赛前发布会复核”。"
+            "可以基于输入中的 key players 给出重点观察和阵容不确定性，但必须避免当作官方事实。"
+            "不要写投注、赔率、盘口或收益建议。"
+        ),
+    }
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": "你是足球赛前资料编辑。缺少实时网页来源时必须保守表达，不得编造已确认伤停。"},
+            {"role": "user", "content": jdump(prompt)},
+        ],
+        "response_format": {"type": "json_object"},
+        "stream": False,
+        "reasoning_effort": env("DEEPSEEK_REASONING_EFFORT", "medium"),
+    }
+    thinking = env("DEEPSEEK_THINKING", "enabled")
+    if thinking:
+        payload["thinking"] = {"type": thinking}
+    async with httpx.AsyncClient(timeout=80) as client:
+        response = await client.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+        )
+    response.raise_for_status()
+    data = json.loads(response.json()["choices"][0]["message"]["content"])
+    saved: list[dict[str, str]] = []
+    seen_titles: set[str] = set()
+    with db() as conn:
+        for index, item in enumerate(data.get("items") or []):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title") or "").strip()
+            snippet = str(item.get("snippet") or "").strip()
+            if not title or not snippet or title in seen_titles:
+                continue
+            seen_titles.add(title)
+            title = f"DeepSeek赛前检索：{title}" if not title.startswith("DeepSeek") else title
+            url = f"deepseek://match/{match_id}/injury-lineup/{index + 1}"
+            conn.execute(
+                "insert into research_sources(match_id,topic,title,url,snippet,fetched_at) values(?,?,?,?,?,?)",
+                (match_id, "deepseek_injury_lineup_note", title, url, snippet, now_iso()),
+            )
+            saved.append({"title": title, "url": url, "snippet": snippet})
+            if len(saved) >= limit:
+                break
+    log_event("research.match", "success", f"Saved {len(saved)} DeepSeek research notes", match_id)
+    return saved
+
+
 async def research_match_sources(match_id: str, limit: int = 8) -> list[dict[str, str]]:
     bundle = match_bundle(match_id)
     api_key = env("SERPER_API_KEY")
     if not api_key:
-        log_event("research.match", "warning", "SERPER_API_KEY is not configured; skipped web research", match_id)
-        return []
+        log_event("research.match", "warning", "SERPER_API_KEY is not configured; using DeepSeek research fallback", match_id)
+        return await deepseek_match_research_sources(match_id, limit=limit)
     queries = [
         f"{bundle['home_name']} {bundle['away_name']} injuries expected lineup formation team news World Cup 2026",
         f"{bundle['home_name']} predicted lineup formation injuries key players",
@@ -857,6 +961,25 @@ def public_player_list(stars: list[str]) -> list[str]:
     return [f"若入选：{name}" for name in stars] if stars else ["官方名单未公布。"]
 
 
+def text_variant(seed: str, count: int) -> int:
+    if count <= 1:
+        return 0
+    return sum(ord(char) for char in seed) % count
+
+
+def player_impact_text(team: str, name: str, detail: str, index: int) -> str:
+    detail = str(detail or "").strip()
+    templates = [
+        f"{name}的第一脚处理会影响{team}前场连续性，重点看他在压迫下的接应、转身和终结选择。",
+        f"{name}更像{team}的节奏调节器，他能否把二点球和横向转移处理干净，会决定进攻是否顺畅。",
+        f"{name}需要在转换阶段补上覆盖和对抗，他的回追质量会直接影响{team}后段防线稳定性。",
+    ]
+    text = templates[index % len(templates)]
+    if detail and index == 0:
+        return f"{text}{detail}"
+    return text
+
+
 def player_analysis_cards(team: str, stars: list[str], detail: str) -> list[dict[str, str]]:
     if not stars:
         return []
@@ -868,10 +991,32 @@ def player_analysis_cards(team: str, stars: list[str], detail: str) -> list[dict
                 "team": team,
                 "name": name,
                 "role": roles[min(index, len(roles) - 1)],
-                "impact": f"{name}是{team}本场需要重点观察的球员。{detail}",
+                "impact": player_impact_text(team, name, detail, index),
             }
         )
     return cards
+
+
+def venue_risk_note(venue: str, leader: str, follower: str) -> str:
+    venue = str(venue or "赛地").strip()
+    options = [
+        f"{venue}的场地适应重点不只是草皮速度，还包括急停转身和回追距离；如果{leader}压上过深，身后空间会被放大。",
+        f"在{venue}比赛，双方需要尽快适应球速和空间尺度；越到后段，{follower}的反击第一脚越容易改变节奏。",
+        f"{venue}的环境因素更应结合热身和开局节奏判断，若比赛进入高强度往返，替补席的速度点会更早被使用。",
+    ]
+    return options[text_variant(f"{venue}{leader}{follower}", len(options))]
+
+
+def venue_condition_notes(venue: str, tags: str, home: str, away: str) -> list[str]:
+    venue = str(venue or "比赛场地").strip()
+    options = [
+        f"{venue}的球速、边线宽度和禁区前沿落点会影响两队推进选择，开局二十分钟的适应质量尤其关键。",
+        f"{home}和{away}都需要先确认场地节奏，再决定边后卫压上幅度；如果球速偏快，回防第一步会更重要。",
+        f"赛地因素不会单独决定胜负，但会改变传中落点、二点球争抢和替补登场后的冲击方式。",
+    ]
+    tag_note = f"本场标签：{tags}，需要结合开局压迫强度、换人时机和领先后的阵型回收一起判断。"
+    weather_note = "天气、风向和湿度只有在可靠来源确认后才进入最终判断，当前版本不把未确认信息写成确定结论。"
+    return [options[text_variant(f"{venue}{home}{away}", len(options))], tag_note, weather_note]
 
 
 def seed_teams() -> list[tuple[str, str, str, float, float, float, float]]:
@@ -1737,8 +1882,8 @@ def fallback_report(bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[
         "risk_points": [
             f"{leader}如果迟迟无法取得领先，比赛会逐渐进入{follower}更容易接受的低比分区间。",
             "赛前 1 小时公布的首发会改变中场覆盖、边路速度和定位球高度，属于必须复核的信息。",
-            "早牌、点球和门将临场状态对单场杯赛影响很大，模型只能把它们计入不确定性区间。",
-            f"{venue}的草皮、气温和旅途恢复会影响冲刺质量，尤其是下半场 60 分钟后的攻防转换。",
+            "早牌、点球或门将处理球失误都会迅速改变比赛重心，领先一方的阵型回收也会随之提前。",
+            venue_risk_note(venue, leader, follower),
             "如果热门方压上过深且丢球点靠近中路，弱势方的一脚直塞或长传就可能制造单刀机会。",
         ],
         "key_matchups": [
@@ -1781,11 +1926,9 @@ def fallback_report(bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[
             "away": away_lineup,
             "note": "官方首发未发布，目前为预测版。",
         },
-        "match_conditions": [
-            f"比赛场地：{venue}，赛地适应、旅行距离和恢复周期会影响下半场质量。",
-            f"本场标签：{tags}，这些因素会被用于判断比赛节奏和爆冷区间。",
-            "天气、草皮速度和风向会在可靠来源确认后进入最终版，当前先按中性条件处理。",
-            "开球时间对应中国观赛时段较晚，但对参赛队真正影响取决于当地气温和湿度。",
+        "match_conditions": venue_condition_notes(venue, tags, home, away)
+        + [
+            "开球时间对应中国观赛时段较晚，但对参赛队真正影响取决于当地气温、湿度和赛前恢复安排。",
             "如果裁判尺度偏松，身体对抗强的一方受益；如果尺度偏严，定位球和点球风险上升。",
         ],
         "upset_conditions": [
@@ -1855,7 +1998,7 @@ async def deepseek_report(
         "prediction": prediction,
         "methodology": KIMI_MODEL_METHOD,
         "sources": sources,
-        "instruction": "请基于输入数据、模型已有足球知识、methodology 和 sources 生成中文赛前分析，输出严格 JSON，字段为 summary, logic, score_prediction, totals_prediction, win_path, risk_points, key_matchups, player_spotlight, player_performance, injury_impact, player_status, lineup_notes, lineups, match_conditions, upset_conditions, data_confidence_note。prediction 中的 home_win/draw/away_win、score_prediction、totals_prediction 是最终模型输出，不得自行改写概率或另造胜率。logic 是面向普通球迷的胜负分析正文，必须写赛场内容：开局节奏、边路/中路推进、回防落位、定位球、二点球、体能、替补冲击、领先和落后后的比赛变化；不要解释模型方法，不要出现 Elo、Poisson、Dixon-Coles、模型、校准、稳定器、外部信号、基础分数、归一化、多模型、置信度、概率分布、确定性结论、赔率、盘口、市场、模型端、市场端、去水、隐含概率、历史对阵、球队身价、开盘等词，也不要写投注建议、套利、收益等表述。score_prediction 包含 primary, alternatives, homeXg, awayXg, confidence, analysis；score_prediction.analysis 可以提到首选比分和备选比分，但不要写概率、赔率或盘口，要从球队攻防、关键球员、比赛节奏解释为什么倾向这个比分。totals_prediction 包含 line, pick, displayPick, overProbability, underProbability, source, analysis，其中 line、overProbability、underProbability、source 只作为内部计算字段，analysis 里严禁出现盘口、赔率、Bet365、参考线、概率、大球概率、小球概率等字样，只能从球队攻防、关键球员、比赛节奏、伤停和赛前条件解释进球数倾向。player_spotlight 是数组，每项包含 team,name,role,impact，标题语义是“球员分析”；name 只能是真实球员名，严禁用反击第一推进点、中卫防空核心、门将出球点、边路爆点、核心持球点等位置/能力描述冒充球员名。player_status 中没有明确伤停来源时写“暂无公布的伤停信息。”和“暂无公布的疑似缺阵信息。”，不要写主力框架可用评估、检索不到明确缺口等内部判断。lineups 包含 home, away, note；home/away 各包含 team, formation, confidence, players, note；players 为 8 到 11 项，每项包含 name, role, line，line 只能是 GK/DEF/MID/FWD。阵容如果官方首发已经发布或 sources 明确提到，confidence 写“正式”；否则 confidence 写“预测”，但可以基于模型已有知识给出具体预测球员，不要只用位置名占位。lineups.note 和 home/away.note 要清楚标记“官方首发未发布，目前为预测版。”或“官方首发已发布，当前为正式版。”。未在输入、sources 或模型可靠知识中出现的伤停不得编造。",
+        "instruction": "请基于输入数据、模型已有足球知识、methodology 和 sources 生成中文赛前分析，输出严格 JSON，字段为 summary, logic, score_prediction, totals_prediction, win_path, risk_points, key_matchups, player_spotlight, player_performance, injury_impact, player_status, lineup_notes, lineups, match_conditions, upset_conditions, data_confidence_note。prediction 中的 home_win/draw/away_win、score_prediction、totals_prediction 是最终模型输出，不得自行改写概率或另造胜率。logic 是面向普通球迷的胜负分析正文，必须写赛场内容：开局节奏、边路/中路推进、回防落位、定位球、二点球、体能、替补冲击、领先和落后后的比赛变化；不要解释模型方法，不要出现 Elo、Poisson、Dixon-Coles、模型、校准、稳定器、外部信号、基础分数、归一化、多模型、置信度、概率分布、确定性结论、赔率、盘口、市场、模型端、市场端、去水、隐含概率、历史对阵、球队身价、开盘等词，也不要写投注建议、套利、收益等表述。score_prediction 包含 primary, alternatives, homeXg, awayXg, confidence, analysis；score_prediction.analysis 可以提到首选比分和备选比分，但不要写概率、赔率或盘口，要从球队攻防、关键球员、比赛节奏解释为什么倾向这个比分。totals_prediction 包含 line, pick, displayPick, overProbability, underProbability, source, analysis，其中 line、overProbability、underProbability、source 只作为内部计算字段，analysis 里严禁出现盘口、赔率、Bet365、参考线、概率、大球概率、小球概率等字样，只能从球队攻防、关键球员、比赛节奏、伤停和赛前条件解释进球数倾向。player_spotlight 是数组，每项包含 team,name,role,impact，标题语义是“球员分析”；name 只能是真实球员名，严禁用反击第一推进点、中卫防空核心、门将出球点、边路爆点、核心持球点等位置/能力描述冒充球员名；impact 不能使用“X是Y本场需要重点观察的球员”这类固定句式，同一队多个球员必须从接应、推进、回防、定位球、替补冲击等不同角度写。risk_points、match_conditions、player_performance 和 upset_conditions 不能复用相同句架；不要批量使用“草皮、气温和旅途恢复会影响冲刺质量”“赛地适应、旅行距离和恢复周期会影响下半场质量”等模板句。player_status 中没有明确伤停来源时写“暂无公布的伤停信息。”和“暂无公布的疑似缺阵信息。”，不要写主力框架可用评估、检索不到明确缺口等内部判断。lineups 包含 home, away, note；home/away 各包含 team, formation, confidence, players, note；players 为 8 到 11 项，每项包含 name, role, line，line 只能是 GK/DEF/MID/FWD。阵容如果官方首发已经发布或 sources 明确提到，confidence 写“正式”；否则 confidence 写“预测”，但可以基于模型已有知识给出具体预测球员，不要只用位置名占位。lineups.note 和 home/away.note 要清楚标记“官方首发未发布，目前为预测版。”或“官方首发已发布，当前为正式版。”。未在输入、sources 或模型可靠知识中出现的伤停不得编造。",
     }
     thinking = thinking if thinking is not None else env("DEEPSEEK_THINKING", "enabled")
     reasoning_effort = reasoning_effort or env("DEEPSEEK_MATCH_REASONING_EFFORT", env("DEEPSEEK_REASONING_EFFORT", "medium"))
@@ -1882,7 +2025,84 @@ async def deepseek_report(
         return json.loads(text)
 
 
+TEMPLATE_TEXT_FRAGMENTS = (
+    "本场需要重点观察的球员",
+    "草皮、气温和旅途恢复会影响冲刺质量",
+    "赛地适应、旅行距离和恢复周期会影响下半场质量",
+    "模型只能把它们计入不确定性区间",
+)
+
+
+def compact_text_signature(text: str) -> str:
+    compact = re.sub(r"[，。；：、\s\dA-Za-z%-]+", "", str(text or ""))
+    compact = re.sub(r"[\u4e00-\u9fff]{2,8}体育场", "体育场", compact)
+    compact = re.sub(r"[\u4e00-\u9fff]{2,8}球场", "球场", compact)
+    return compact[:42]
+
+
+def rewrite_template_text(text: Any, bundle: dict[str, Any], index: int = 0) -> str:
+    value = str(text or "").strip()
+    if not value:
+        return ""
+    home = bundle["home_name"]
+    away = bundle["away_name"]
+    prediction_hint = bundle.get("_prediction_hint") or {}
+    leader = prediction_hint.get("leader") or home
+    follower = away if leader == home else home
+    venue = str(bundle.get("venue") or "赛地")
+    if "草皮、气温和旅途恢复会影响冲刺质量" in value or "赛地适应、旅行距离和恢复周期会影响下半场质量" in value:
+        return venue_risk_note(venue, leader, follower)
+    if "本场需要重点观察的球员" in value:
+        names = real_star_names(bundle.get("home_profile") or {}) + real_star_names(bundle.get("away_profile") or {})
+        name = names[index % len(names)] if names else "关键球员"
+        team = home if name in real_star_names(bundle.get("home_profile") or {}) else away
+        return player_impact_text(team, name, "", index)
+    return value
+
+
+def clean_text_list(values: Any, bundle: dict[str, Any], limit: int = 5) -> list[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, list):
+        return []
+    cleaned: list[str] = []
+    signatures: set[str] = set()
+    for index, item in enumerate(values):
+        text = rewrite_template_text(item, bundle, index)
+        if not text:
+            continue
+        signature = compact_text_signature(text)
+        if signature and signature in signatures:
+            continue
+        signatures.add(signature)
+        cleaned.append(text)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+def clean_player_spotlights(items: Any, bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    cleaned: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).strip()
+        if not name or name in GENERIC_PLAYER_TERMS or name in seen_names:
+            continue
+        seen_names.add(name)
+        copy = {**item}
+        copy["impact"] = rewrite_template_text(copy.get("impact"), bundle, index)
+        cleaned.append(copy)
+        if len(cleaned) >= 6:
+            break
+    return cleaned
+
+
 def normalize_report_content(content: dict[str, Any], bundle: dict[str, Any], prediction: dict[str, Any]) -> dict[str, Any]:
+    bundle = {**bundle, "_prediction_hint": {"leader": bundle["home_name"] if prediction["home_win"] >= prediction["away_win"] else bundle["away_name"]}}
     fallback = fallback_report(bundle, prediction)
     for key, value in fallback.items():
         if key not in content or content[key] in (None, "", [], {}):
@@ -1894,11 +2114,11 @@ def normalize_report_content(content: dict[str, Any], bundle: dict[str, Any], pr
     content["totals_prediction"] = {**fallback["totals_prediction"], **content.get("totals_prediction", {})}
     content["logic"] = enrich_logic_text(content.get("logic"), bundle, prediction)
     content["calculation_method_note"] = model_method_note(prediction)
-    content["player_spotlight"] = [
-        item
-        for item in content.get("player_spotlight", [])
-        if isinstance(item, dict) and str(item.get("name", "")).strip() and str(item.get("name", "")).strip() not in GENERIC_PLAYER_TERMS
-    ]
+    content["player_spotlight"] = clean_player_spotlights(content.get("player_spotlight", []), bundle)
+    for key in ("risk_points", "match_conditions", "player_performance", "upset_conditions"):
+        cleaned = clean_text_list(content.get(key), bundle)
+        if cleaned:
+            content[key] = cleaned
     content["player_status"] = sanitize_player_status(content.get("player_status", {}), fallback["player_status"])
     content["lineup_notes"] = sanitize_lineup_notes(content.get("lineup_notes", {}), fallback["lineup_notes"])
     content["lineups"] = {**fallback["lineups"], **content.get("lineups", {})}
@@ -2932,11 +3152,10 @@ async def admin_sync_odds() -> dict[str, Any]:
 
 @app.post("/api/admin/matches/{match_id}/research", dependencies=[Depends(require_admin)])
 async def admin_research_match(match_id: str) -> dict[str, Any]:
-    if not env("SERPER_API_KEY"):
-        log_event("research.match", "error", "SERPER_API_KEY is not configured", match_id)
-        raise HTTPException(status_code=400, detail="SERPER_API_KEY is not configured")
     saved = await research_match_sources(match_id)
-    return {"ok": True, "saved": saved}
+    provider = "serper" if env("SERPER_API_KEY") else "deepseek"
+    refresh_computed_data_status()
+    return {"ok": True, "provider": provider, "saved": saved}
 
 
 @app.post("/api/admin/matches/{match_id}/generate", dependencies=[Depends(require_admin)])

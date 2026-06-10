@@ -249,7 +249,7 @@ async function loadMatches() {
               <small>预测：${match.prediction_generated_at || "未生成"} · 发布：${match.published_report_id || "未发布"}</small>
             </div>
             <div class="admin-buttons">
-              <button data-research="${match.id}" type="button">检索</button>
+              <button data-research="${match.id}" type="button">伤停检索</button>
               <button data-generate="${match.id}" type="button">生成</button>
             </div>
           </article>
