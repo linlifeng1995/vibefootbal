@@ -59,9 +59,8 @@ def block(title: str, body: str, *, color: str = "#f6c35b", border: bool = True,
 
 
 def match_header_a(*, dark_safe: bool = False) -> str:
-    line_color = "rgba(255,255,255,0.18)" if dark_safe else "rgba(255,255,255,0.16)"
     meta_color = "#cfd7d4" if dark_safe else "#c9d2cf"
-    return f'<section style="margin:0 0 6px;padding:8px 0 3px;border-top:1px solid {line_color};"><p style="margin:0 0 1px;white-space:nowrap;color:#ffffff;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span><span style="color:#ffffff;font-size:17px;font-weight:900;">&nbsp;&nbsp;墨西哥 vs 南非</span></p><p style="margin:0 0 0 75px;white-space:nowrap;color:{meta_color};font-size:13px;line-height:1.25;font-weight:700;">A 组 · 墨西哥城</p></section>'
+    return f'<section style="margin:0 0 6px;padding:8px 0 3px;"><p style="margin:0 0 1px;white-space:nowrap;color:#ffffff;font-size:17px;line-height:1.2;font-weight:900;"><span style="color:#f6c35b;font-size:21px;font-weight:900;">03:00</span><span style="color:#ffffff;font-size:17px;font-weight:900;">&nbsp;&nbsp;墨西哥 vs 南非</span></p><p style="margin:0 0 0 75px;white-space:nowrap;color:{meta_color};font-size:13px;line-height:1.25;font-weight:700;">A 组 · 墨西哥城</p></section>'
 
 
 def match_header_b() -> str:
