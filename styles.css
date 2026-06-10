@@ -956,13 +956,17 @@ h1 {
 }
 
 .method-help::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  z-index: 20;
-  left: 50%;
-  top: calc(100% + 10px);
-  width: min(360px, 76vw);
-  transform: translateX(-50%) translateY(-4px);
+  display: none;
+}
+
+.floating-tooltip {
+  position: fixed;
+  z-index: 80;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 24px));
+  max-width: min(360px, calc(100vw - 24px));
   border: 1px solid rgba(238, 197, 123, 0.28);
   border-radius: 10px;
   padding: 10px 12px;
@@ -973,16 +977,18 @@ h1 {
   font-weight: 700;
   line-height: 1.65;
   white-space: normal;
+  overflow-wrap: anywhere;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.16s ease, transform 0.16s ease;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
 }
 
-.method-help:hover::after,
-.method-help:focus-visible::after,
-.method-help:focus::after {
+.floating-tooltip.visible {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .model-logic-text {
@@ -1034,16 +1040,11 @@ h1 {
   font-size: 11px;
 }
 
-.factor-help::after {
-  left: auto;
-  right: 0;
-  width: min(300px, 72vw);
-  transform: translateY(-4px);
+.floating-tooltip[data-placement="top"] {
+  transform: translateY(4px);
 }
 
-.factor-help:hover::after,
-.factor-help:focus-visible::after,
-.factor-help:focus::after {
+.floating-tooltip.visible[data-placement="top"] {
   transform: translateY(0);
 }
 

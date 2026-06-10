@@ -752,7 +752,7 @@ def fact_check_wechat_article(source: dict[str, Any], article: dict[str, Any]) -
         issues.append("Missing disclaimer")
 
     allowed = _allowed_fact_tokens(source)
-    score_like = sorted(set(re.findall(r"\b\d{1,2}-\d{1,2}\b", text)))
+    score_like = sorted(set(re.findall(r"(?<![\d-])\d{1,2}-\d{1,2}(?![\d-])", text)))
     for score in score_like:
         left, right = score.split("-", 1)
         if int(left) > 9 or int(right) > 9:

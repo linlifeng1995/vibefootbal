@@ -136,7 +136,7 @@ SEED_VERSION = "2026-official-groups-v1"
 前台展示约束：
 
 - `胜负分析` 要保留模型评比和分数比较，但移除“模型如何计算”的长篇理论论证。
-- 计算方法说明集中到小问号提示，不要在每场正文里重复展示。
+- 计算方法说明集中到小问号提示，不要在每场正文里重复展示；移动端提示必须使用视口夹紧的 `.floating-tooltip`，避免靠边按钮点开后超出屏幕。
 - 胜负逻辑需要针对每场比赛展开具体球队、打法、节奏和风险，不要只写通用模板。
 - `比分预测` 需要包含首选比分、备选比分、进球数倾向和具体原因。
 
@@ -361,6 +361,7 @@ V1 约束：
 - 只做“每日前瞻”，不做单场前瞻、冠军预测文章和自动发布。
 - DeepSeek 只负责公众号化表达，不允许创造输入 source 以外的事实。
 - fact check 失败时状态为 `fact_failed`，禁止推送草稿箱。
+- 比分 fact check 只校验独立比分，例如 `1-0`、`2-1`；阵型 `4-2-3-1` 中的 `2-3` 不能被当作比分。
 - 定时任务 `公众号每日前瞻生成并推草稿` 会生成文章并自动推送到微信公众号草稿箱；后台公众号模块的“生成每日前瞻”按钮仍只生成文章，预览后可手动点“推送草稿箱”。
 - 草稿封面使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，第一版不动态生成封面。
 - 正文标题图使用仓库内固定 PNG：`assets/wechat-article-hero-card.png`。后台预览走 `/static/assets/wechat-article-hero-card.png`；推草稿时优先使用 `.env` 的 `WECHAT_ARTICLE_HERO_IMAGE_WECHAT_URL`，未配置时才调用微信 `media/uploadimg` 现场上传并替换正文 URL。封面才使用 `WECHAT_DEFAULT_COVER_MEDIA_ID`，正文标题图不能直接使用素材库 `media_id`。

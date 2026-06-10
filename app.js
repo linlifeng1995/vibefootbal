@@ -661,6 +661,71 @@ function attrText(value) {
     .replaceAll(">", "&gt;");
 }
 
+let activeHelpTarget = null;
+let helpTooltip = null;
+
+function ensureHelpTooltip() {
+  if (helpTooltip) return helpTooltip;
+  helpTooltip = document.createElement("div");
+  helpTooltip.className = "floating-tooltip";
+  helpTooltip.id = "floatingHelpTooltip";
+  helpTooltip.setAttribute("role", "tooltip");
+  document.body.appendChild(helpTooltip);
+  return helpTooltip;
+}
+
+function hideHelpTooltip() {
+  if (activeHelpTarget) {
+    activeHelpTarget.removeAttribute("aria-describedby");
+    activeHelpTarget.setAttribute("aria-expanded", "false");
+  }
+  activeHelpTarget = null;
+  if (helpTooltip) {
+    helpTooltip.classList.remove("visible");
+    helpTooltip.hidden = true;
+  }
+}
+
+function positionHelpTooltip(target) {
+  const tooltip = ensureHelpTooltip();
+  const margin = 12;
+  const targetRect = target.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+
+  tooltip.style.maxWidth = `${Math.max(220, viewportWidth - margin * 2)}px`;
+  tooltip.style.left = "0px";
+  tooltip.style.top = "0px";
+  tooltip.hidden = false;
+
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const maxLeft = Math.max(margin, viewportWidth - tooltipRect.width - margin);
+  const preferredLeft = targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+  const left = Math.min(Math.max(preferredLeft, margin), maxLeft);
+
+  const belowTop = targetRect.bottom + 10;
+  const aboveTop = targetRect.top - tooltipRect.height - 10;
+  const useAbove = belowTop + tooltipRect.height > viewportHeight - margin && aboveTop >= margin;
+  const top = useAbove ? aboveTop : Math.min(belowTop, Math.max(margin, viewportHeight - tooltipRect.height - margin));
+
+  tooltip.dataset.placement = useAbove ? "top" : "bottom";
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function showHelpTooltip(target) {
+  const text = target?.dataset?.tooltip || "";
+  if (!text) return;
+  const tooltip = ensureHelpTooltip();
+  tooltip.textContent = text;
+  activeHelpTarget?.setAttribute("aria-expanded", "false");
+  activeHelpTarget = target;
+  target.setAttribute("aria-describedby", tooltip.id);
+  target.setAttribute("aria-expanded", "true");
+  positionHelpTooltip(target);
+  requestAnimationFrame(() => tooltip.classList.add("visible"));
+}
+
 function cleanLogicText(text) {
   const banned = [
     "Elo",
@@ -999,6 +1064,7 @@ function syncTabs() {
 }
 
 function render() {
+  hideHelpTooltip();
   const match = selectedMatch();
   renderMatchList();
   renderHero(match);
@@ -1038,16 +1104,52 @@ document.querySelector(".main-nav").addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  const activeHelp = document.activeElement?.closest?.(".method-help");
-  if (!activeHelp) return;
   const clickedHelp = event.target.closest?.(".method-help");
-  if (clickedHelp !== activeHelp) activeHelp.blur();
+  if (clickedHelp) {
+    event.preventDefault();
+    clickedHelp.focus({ preventScroll: true });
+    showHelpTooltip(clickedHelp);
+    return;
+  }
+  hideHelpTooltip();
+});
+
+document.addEventListener("focusin", (event) => {
+  const help = event.target.closest?.(".method-help");
+  if (help) {
+    showHelpTooltip(help);
+  } else {
+    hideHelpTooltip();
+  }
 });
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  const activeHelp = document.activeElement?.closest?.(".method-help");
-  if (activeHelp) activeHelp.blur();
+  hideHelpTooltip();
+  document.activeElement?.blur?.();
+});
+
+window.addEventListener("resize", () => {
+  if (activeHelpTarget) positionHelpTooltip(activeHelpTarget);
+});
+
+window.addEventListener("scroll", () => {
+  if (activeHelpTarget && document.body.contains(activeHelpTarget)) {
+    positionHelpTooltip(activeHelpTarget);
+  }
+}, { passive: true });
+
+document.addEventListener("pointerover", (event) => {
+  if (event.pointerType !== "mouse") return;
+  const help = event.target.closest?.(".method-help");
+  if (help) showHelpTooltip(help);
+});
+
+document.addEventListener("pointerout", (event) => {
+  if (event.pointerType !== "mouse") return;
+  const help = event.target.closest?.(".method-help");
+  if (!help || help.contains(event.relatedTarget)) return;
+  hideHelpTooltip();
 });
 
 loadInitialData();
