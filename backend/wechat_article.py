@@ -139,6 +139,110 @@ def build_daily_preview_source(matchday: str) -> dict[str, Any]:
     }
 
 
+def _source_date_label(source: dict[str, Any]) -> str:
+    label = str(source.get("label") or "").strip()
+    if label:
+        return label.replace("赛事", "").strip()
+    matchday = str(source.get("matchday") or "").strip()
+    try:
+        dt = datetime.fromisoformat(matchday)
+        return f"{dt.month}月{dt.day}日"
+    except ValueError:
+        return matchday or "今日"
+
+
+def _match_pair(match: dict[str, Any]) -> str:
+    home = str(match.get("home") or "待定").strip()
+    away = str(match.get("away") or "待定").strip()
+    return f"{home}vs{away}"
+
+
+def _sorted_source_matches(source: dict[str, Any]) -> list[dict[str, Any]]:
+    matches = [item for item in (source.get("matches") or []) if isinstance(item, dict)]
+    return sorted(matches, key=lambda item: str(item.get("kickoff") or ""))
+
+
+def _focus_teams(matches: list[dict[str, Any]]) -> list[str]:
+    priority = (
+        "巴西",
+        "阿根廷",
+        "法国",
+        "英格兰",
+        "德国",
+        "西班牙",
+        "葡萄牙",
+        "荷兰",
+        "比利时",
+        "乌拉圭",
+        "克罗地亚",
+        "墨西哥",
+        "美国",
+        "瑞士",
+        "韩国",
+        "日本",
+    )
+    teams: list[str] = []
+    for match in matches:
+        teams.extend(str(match.get(key) or "").strip() for key in ("home", "away"))
+    return [team for team in priority if team in teams]
+
+
+def _highest_risk_match(matches: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not matches:
+        return None
+
+    def risk_value(match: dict[str, Any]) -> float:
+        try:
+            return float(match.get("upsetIndex") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    return max(matches, key=risk_value)
+
+
+def _is_generic_article_title(title: str, source: dict[str, Any]) -> bool:
+    compact = re.sub(r"\s+", "", title)
+    if not compact:
+        return True
+    generic_terms = ("世界杯前瞻", "赛事前瞻", "今日前瞻", "每日前瞻", "比赛日前瞻")
+    has_only_generic = any(term in compact for term in generic_terms) and "：" not in compact and ":" not in compact
+    if has_only_generic:
+        return True
+    teams = {
+        str(match.get(key) or "").strip()
+        for match in source.get("matches") or []
+        if isinstance(match, dict)
+        for key in ("home", "away")
+    }
+    teams.discard("")
+    return not any(team in title for team in teams)
+
+
+def _build_article_title(source: dict[str, Any], raw_title: Any = "") -> str:
+    title = str(raw_title or "").strip()
+    if title and not _is_generic_article_title(title, source):
+        return title[:64]
+
+    matches = _sorted_source_matches(source)
+    date_label = _source_date_label(source)
+    if not matches:
+        return f"{date_label}世界杯前瞻：赛程与观赛重点速览"[:64]
+
+    first = matches[0]
+    first_pair = _match_pair(first)
+    first_home = str(first.get("home") or "").strip()
+    first_teams = {str(first.get(key) or "").strip() for key in ("home", "away")}
+    focus = [team for team in _focus_teams(matches) if team and team not in first_teams]
+    if focus:
+        return f"{date_label}世界杯前瞻：{first_home or first_pair}打头阵，{'、'.join(focus[:2])}同日亮相"[:64]
+
+    risk = _highest_risk_match(matches)
+    if risk and risk is not first:
+        return f"{date_label}世界杯前瞻：{first_pair}打头阵，{_match_pair(risk)}藏变数"[:64]
+
+    return f"{date_label}世界杯前瞻：{first_pair}领衔，今日{len(matches)}场逐场拆解"[:64]
+
+
 def _normalize_article_payload(raw: Any, source: dict[str, Any]) -> dict[str, str]:
     if isinstance(raw, str):
         try:
@@ -152,7 +256,7 @@ def _normalize_article_payload(raw: Any, source: dict[str, Any]) -> dict[str, st
     if DISCLAIMER not in markdown:
         markdown = f"{markdown.rstrip()}\n\n## 风险提示\n{DISCLAIMER}" if markdown else _fallback_markdown(source)
     markdown = _stabilize_markdown_with_source(markdown, source)
-    title = str(raw.get("title") or f"{source.get('label') or source.get('matchday')}世界杯前瞻").strip()[:64]
+    title = _build_article_title(source, raw.get("title"))
     digest = str(raw.get("digest") or "基于赛程、模型概率、比分预测和赛前条件，整理今日观赛重点。").strip()[:120]
     return {"title": title, "digest": digest, "markdown": markdown}
 
@@ -329,6 +433,8 @@ async def _deepseek_daily_preview(source: dict[str, Any]) -> dict[str, str]:
         "rules": [
             "只使用 source 中出现的事实，不新增球员、伤停、赔率、历史战绩。",
             "如果 reportMissing=true，只能写报告待更新，不得编造分析。",
+            "title 必须包含日期和当天至少一场具体比赛或球队，突出今日最值得看的赛程线索；不要输出“6月11日赛事世界杯前瞻”这类泛标题。",
+            "title 控制在 24-36 个中文字符左右，可以使用冒号，语气要像公众号标题但不能夸大确定性。",
             "赛事前瞻必须按比赛逐场展开，每场固定包含胜负分析、比分进球、冷门风险三项，不要先罗列赛程再单独写重点场次。",
             "胜负分析必须优先使用每场的 logic 字段；比分进球只使用 score_prediction 和 totals_prediction；冷门风险只使用 upsetIndex 和 risk_points。",
             "输出严格 JSON，字段为 title、digest、markdown。",
