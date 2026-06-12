@@ -1015,7 +1015,6 @@ def push_wechat_draft(article: dict[str, Any]) -> dict[str, Any]:
                 "author": _env_value("WECHAT_AUTHOR", "世界杯观赛助手"),
                 "digest": article["digest"],
                 "content": content,
-                "content_source_url": _env_value("WECHAT_ARTICLE_SOURCE_URL", "http://140.143.182.236/worldcup/"),
                 "thumb_media_id": thumb_media_id,
                 "need_open_comment": 0,
                 "only_fans_can_comment": 0,

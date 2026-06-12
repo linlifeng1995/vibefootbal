@@ -147,7 +147,6 @@ def push_draft(token: str, title: str, content: str) -> str:
                 "author": env("WECHAT_AUTHOR", "世界杯观赛助手"),
                 "digest": "公众号样式测试稿，仅用于确认微信编辑器内的手机排版效果。",
                 "content": content,
-                "content_source_url": env("WECHAT_ARTICLE_SOURCE_URL", SOURCE_URL),
                 "thumb_media_id": thumb_media_id,
                 "need_open_comment": 0,
                 "only_fans_can_comment": 0,

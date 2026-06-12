@@ -54,6 +54,11 @@
 
 ## 公众号每日前瞻模块
 
+- 固定叫法：以后把管理端生成的公众号文章称为“赛况预测”。它对应 `backend/wechat_article.py` + Admin 页面 + `wechat_daily_preview` 定时任务这条链路，会把文章保存到 SQLite 的 `wechat_articles` 表，Admin 可预览后手动推草稿；定时任务也会自动生成并推送草稿箱。
+- 固定叫法：以后把 Codex 自动化生成的公众号文章称为“赛前解读”。它对应 `tools/push_next_wechat_matchday_draft.py` 这条链路，不经过 `wechat_articles` 表保存文章记录，而是生成本地 `automation_outputs/wechat_drafts/<matchday>/draft-payload.json` / `article.html`，再调用线上 `/api/admin/wechat/raw-image` 和 `/api/admin/wechat/raw-draft` 直接推微信草稿箱。
+- 避免歧义：用户说“赛况预测”时，只改 `backend/wechat_article.py`、`backend/main.py` 的 Admin API / scheduler 和 `admin.*`。用户说“赛前解读”时，优先改 `tools/push_next_wechat_matchday_draft.py` 及其输出 payload。用户只说“公众号文章生成”时，需要先确认指的是哪一条链路。
+- 合规硬约束：两条公众号草稿链路都不得写入 `content_source_url`，也不要再依赖 `WECHAT_ARTICLE_SOURCE_URL` 生成“阅读原文”。`/api/admin/wechat/raw-draft` 必须继续兜底删除 payload 中的 `content_source_url`，防止旧脚本或手工 payload 带外链。
+- `tools/push_wechat_style_samples.py` 只算“公众号样式测试稿”，不是正式每日前瞻；它同样不得写入 `content_source_url`。
 - 公众号能力内置在现有 FastAPI 工程内，不另起独立服务。
 - 核心文件是 `backend/wechat_article.py`，负责每日前瞻 source 聚合、DeepSeek 生成、事实校验、微信 HTML 渲染和草稿箱推送。
 - `backend/main.py` 负责注册 `wechat_articles` 表、Admin API 和 `wechat_daily_preview` 定时任务。

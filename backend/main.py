@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import math
 import os
 import random
@@ -20,7 +21,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import wechat_article
@@ -2798,7 +2799,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+app.mount("/static/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="static_assets")
 
 
 @app.get("/api/health")
@@ -3132,6 +3133,66 @@ def admin_push_wechat_draft(article_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=message) from exc
 
 
+@app.post("/api/admin/wechat/raw-draft", dependencies=[Depends(require_admin)])
+def admin_push_wechat_raw_draft(payload: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    try:
+        payload = json.loads(json.dumps(payload))
+        for article in payload.get("articles") or []:
+            if isinstance(article, dict):
+                article.pop("content_source_url", None)
+        token = wechat_article.get_wechat_access_token()
+        response = wechat_article._wechat_request(
+            "wechat raw draft add",
+            "POST",
+            "https://api.weixin.qq.com/cgi-bin/draft/add",
+            params={"access_token": token},
+            json=payload,
+            attempts=2,
+            timeout=30,
+        )
+        data = response.json()
+        if data.get("errcode"):
+            raise RuntimeError(f"WeChat draft error: {data}")
+        log_event("wechat.raw_draft", "success", f"Pushed raw WeChat draft {data.get('media_id')}")
+        return data
+    except Exception as exc:
+        message = f"{type(exc).__name__}: {exc}"
+        log_event("wechat.raw_draft", "error", message)
+        raise HTTPException(status_code=500, detail=message) from exc
+
+
+@app.post("/api/admin/wechat/raw-image", dependencies=[Depends(require_admin)])
+def admin_upload_wechat_raw_image(payload: dict[str, Any] = Body(default_factory=dict)) -> dict[str, Any]:
+    try:
+        filename = str(payload.get("filename") or "codex-image.png").strip() or "codex-image.png"
+        content_type = str(payload.get("content_type") or "image/png").strip() or "image/png"
+        image_base64 = str(payload.get("base64") or "").strip()
+        if not image_base64:
+            raise HTTPException(status_code=400, detail="base64 image is required")
+        image_bytes = base64.b64decode(image_base64, validate=True)
+        token = wechat_article.get_wechat_access_token()
+        response = wechat_article._wechat_request(
+            "wechat raw image upload",
+            "POST",
+            "https://api.weixin.qq.com/cgi-bin/media/uploadimg",
+            params={"access_token": token},
+            files={"media": (filename, image_bytes, content_type)},
+            attempts=2,
+            timeout=30,
+        )
+        data = response.json()
+        if data.get("errcode"):
+            raise RuntimeError(f"WeChat image upload error: {data}")
+        log_event("wechat.raw_image", "success", f"Uploaded raw WeChat image {data.get('url')}")
+        return data
+    except HTTPException:
+        raise
+    except Exception as exc:
+        message = f"{type(exc).__name__}: {exc}"
+        log_event("wechat.raw_image", "error", message)
+        raise HTTPException(status_code=500, detail=message) from exc
+
+
 @app.post("/api/admin/sync/fixtures", dependencies=[Depends(require_admin)])
 async def admin_sync_fixtures() -> dict[str, Any]:
     if not env("API_FOOTBALL_KEY"):
@@ -3259,14 +3320,97 @@ def admin_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "admin.html")
 
 
-@app.get("/")
-def index() -> FileResponse:
+FRONTEND_REVIEW_PATH = "/model-demo"
+
+
+def remediation_404() -> HTMLResponse:
+    return HTMLResponse(
+        """
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>页面整改中</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        background: #f7f8fa;
+        color: #1f2933;
+      }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+      main {
+        width: min(560px, 100%);
+        background: #ffffff;
+        border: 1px solid #d9dee7;
+        border-radius: 8px;
+        padding: 28px;
+        box-shadow: 0 18px 50px rgba(17, 24, 39, 0.08);
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 24px;
+        line-height: 1.25;
+      }
+      p {
+        margin: 0;
+        color: #52606d;
+        font-size: 15px;
+        line-height: 1.8;
+      }
+      strong {
+        display: block;
+        margin-bottom: 8px;
+        color: #9f1239;
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <strong>404 / REMEDIATION</strong>
+      <h1>页面整改中</h1>
+      <p>
+        该页面已暂停访问并进行合规整改。本站不提供彩票购买、开户链接、投注跳转、
+        付费荐彩、社群引流或任何形式的投注建议，也不收集手机号、微信号、支付信息等敏感信息。
+      </p>
+    </main>
+  </body>
+</html>
+        """.strip(),
+        status_code=404,
+    )
+
+
+@app.get(FRONTEND_REVIEW_PATH)
+def frontend_review_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
+
+
+@app.get(f"{FRONTEND_REVIEW_PATH}/")
+def frontend_review_page_slash() -> RedirectResponse:
+    return RedirectResponse(FRONTEND_REVIEW_PATH, status_code=307)
+
+
+@app.get("/")
+def index() -> HTMLResponse:
+    return remediation_404()
 
 
 @app.get("/{path:path}")
-def static_fallback(path: str, request: Request) -> FileResponse:
+def static_fallback(path: str, request: Request):
+    if path.strip("/").lower() == "index.html":
+        return remediation_404()
     target = FRONTEND_DIR / path
     if target.is_file():
         return FileResponse(target)
-    return FileResponse(FRONTEND_DIR / "index.html")
+    return remediation_404()
